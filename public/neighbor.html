@@ -627,31 +627,46 @@
 
         // Control volume
         async function controlVolume(volume) {
-            try {
-                const response = await fetch(`/api/control/${appState.linkId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        volume: volume,
-                        neighborId: appState.neighborId,
-                        action: 'volume_change'
-                    })
-                });
+    console.log('🔊 CONTROLLING VOLUME:', volume);
+    
+    try {
+        const requestBody = {
+            volume: volume,
+            neighborId: appState.neighborId,
+            action: 'volume_change'
+        };
+        
+        console.log('📤 VOLUME REQUEST:', requestBody);
+        
+        const response = await fetch(`/api/control/${appState.linkId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
 
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateStatusText(`🔊 Głośność zmieniona na ${volume}%`);
-                    showNotification(`🔊 Ustawiono ${volume}%`, 'success');
-                } else {
-                    throw new Error(data.error || 'Failed to control volume');
-                }
-                
-            } catch (error) {
-                console.error('Volume control error:', error);
-                showNotification('❌ Błąd kontroli głośności', 'error');
-            }
+        console.log('📥 VOLUME RESPONSE STATUS:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ VOLUME RESPONSE ERROR:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
+        
+        const data = await response.json();
+        console.log('✅ VOLUME RESPONSE DATA:', data);
+        
+        if (data.success) {
+            updateStatusText(`🔊 Głośność zmieniona na ${volume}%`);
+            showNotification(`🔊 Ustawiono ${volume}%`, 'success');
+        } else {
+            throw new Error(data.error || 'Failed to control volume');
+        }
+        
+    } catch (error) {
+        console.error('❌ VOLUME CONTROL ERROR:', error);
+        showNotification(`❌ Błąd: ${error.message}`, 'error');
+    }
+}
 
         // Set specific volume
         function setVolume(volume) {
@@ -661,79 +676,117 @@
 
         // Send emoji with poetic message
         async function sendEmoji(emoji, fallbackMessage) {
-            try {
-                // Get random poetic message
-                const messages = poeticMessages[emoji] || [fallbackMessage];
-                const poeticMessage = messages[Math.floor(Math.random() * messages.length)];
-                
-                const response = await fetch(`/api/control/${appState.linkId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        neighborId: appState.neighborId,
-                        action: 'emoji_message',
-                        message: poeticMessage
-                    })
-                });
+    console.log('🎭 SENDING EMOJI:', { emoji, fallbackMessage });
+    
+    try {
+        // Get random poetic message
+        const messages = poeticMessages[emoji] || [fallbackMessage];
+        const poeticMessage = messages[Math.floor(Math.random() * messages.length)];
+        
+        console.log('📝 SELECTED MESSAGE:', poeticMessage);
+        
+        const requestBody = {
+            neighborId: appState.neighborId,
+            action: 'emoji_message',
+            message: poeticMessage
+        };
+        
+        console.log('📤 SENDING REQUEST:', requestBody);
+        
+        const response = await fetch(`/api/control/${appState.linkId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
 
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateStatusText(`${emoji} Wysłano: "${poeticMessage}"`);
-                    showNotification(`${emoji} Wiadomość wysłana!`, 'success');
-                    
-                    // Animate emoji button
-                    animateButton(event.target);
-                } else {
-                    throw new Error(data.error || 'Failed to send message');
-                }
-                
-            } catch (error) {
-                console.error('Send emoji error:', error);
-                showNotification('❌ Błąd wysyłania wiadomości', 'error');
-            }
+        console.log('📥 RESPONSE STATUS:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ RESPONSE ERROR:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
-
+        
+        const data = await response.json();
+        console.log('✅ RESPONSE DATA:', data);
+        
+        if (data.success) {
+            updateStatusText(`${emoji} Wysłano: "${poeticMessage}"`);
+            showNotification(`${emoji} Wiadomość wysłana!`, 'success');
+            
+            // Find and animate the clicked button
+            const clickedButton = document.querySelector('.emoji-btn:hover, .emoji-btn:focus, .emoji-btn:active');
+            if (clickedButton) {
+                animateButton(clickedButton);
+            }
+        } else {
+            throw new Error(data.error || 'Failed to send message');
+        }
+        
+    } catch (error) {
+        console.error('❌ SEND EMOJI ERROR:', error);
+        showNotification(`❌ Błąd: ${error.message}`, 'error');
+    }
+}
         // Send thank you message
         async function sendThankYou() {
-            const thankYouMessages = [
-                "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕",
-                "słodka harmonia między nami jak kawka o poranku ☀️",
-                "w rytmie serca i muzyki - dziękuję za cierpliwość 💙",
-                "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵",
-                "miłość sąsiedzka piękniejsza niż każda ballada 💕"
-            ];
-            
-            const randomMessage = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
-            
-            try {
-                const response = await fetch(`/api/control/${appState.linkId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        neighborId: appState.neighborId,
-                        action: 'thank_you',
-                        message: randomMessage
-                    })
-                });
+    console.log('❤️ SENDING THANK YOU');
+    
+    const thankYouMessages = [
+        "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕",
+        "słodka harmonia między nami jak kawka o poranku ☀️",
+        "w rytmie serca i muzyki - dziękuję za cierpliwość 💙",
+        "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵",
+        "miłość sąsiedzka piękniejsza niż każda ballada 💕"
+    ];
+    
+    const randomMessage = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
+    console.log('💕 SELECTED THANK YOU:', randomMessage);
+    
+    try {
+        const requestBody = {
+            neighborId: appState.neighborId,
+            action: 'thank_you',
+            message: randomMessage
+        };
+        
+        console.log('📤 SENDING THANK YOU REQUEST:', requestBody);
+        
+        const response = await fetch(`/api/control/${appState.linkId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
 
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateStatusText(`❤️ Podziękowanie: "${randomMessage}"`);
-                    showNotification('❤️ Poetyckie dzięki wysłane!', 'success');
-                    
-                    // Animate button
-                    animateButton(event.target);
-                } else {
-                    throw new Error(data.error || 'Failed to send thank you');
-                }
-                
-            } catch (error) {
-                console.error('Send thank you error:', error);
-                showNotification('❌ Błąd wysyłania podziękowania', 'error');
-            }
+        console.log('📥 THANK YOU RESPONSE STATUS:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ THANK YOU RESPONSE ERROR:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
+        
+        const data = await response.json();
+        console.log('✅ THANK YOU RESPONSE DATA:', data);
+        
+        if (data.success) {
+            updateStatusText(`❤️ Podziękowanie: "${randomMessage}"`);
+            showNotification('❤️ Poetyckie dzięki wysłane!', 'success');
+            
+            // Find and animate the thank you button
+            const thankYouButton = document.querySelector('.btn.primary');
+            if (thankYouButton) {
+                animateButton(thankYouButton);
+            }
+        } else {
+            throw new Error(data.error || 'Failed to send thank you');
+        }
+        
+    } catch (error) {
+        console.error('❌ SEND THANK YOU ERROR:', error);
+        showNotification(`❌ Błąd: ${error.message}`, 'error');
+    }
+}
 
         // Animate button
         function animateButton(button) {
