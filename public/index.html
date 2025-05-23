@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeighborlyVolume - Spotify Control</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #1DB954, #1ed760, #ffffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 25px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .status-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .connection-status {
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .connected {
+            background: rgba(29, 185, 84, 0.2);
+            border: 2px solid #1DB954;
+        }
+
+        .disconnected {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .spotify-btn {
+            background: #1DB954;
+            color: white;
+            padding: 18px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .spotify-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(29, 185, 84, 0.6);
+            background: #1ed760;
+        }
+
+        .current-track {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .track-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .track-info h3 {
+            color: #1DB954;
+            margin-bottom: 5px;
+        }
+
+        .volume-display {
+            font-size: 4rem;
+            color: #1DB954;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            text-shadow: 0 0 20px rgba(29, 185, 84, 0.5);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            border-left: 4px solid #1DB954;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #1DB954;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            opacity: 0.8;
+            font-size: 1rem;
+        }
+
+        .link-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .generated-link {
+            background: rgba(0,0,0,0.4);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin: 15px 0;
+            word-break: break-all;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn {
+            background: linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #1DB954;
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: linear-gradient(45deg, #1DB954, #1ed760);
+            border-color: #1DB954;
+        }
+
+        .activity-feed {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+
+        .activity-item {
+            padding: 15px;
+            border-left: 3px solid #1DB954;
+            margin-bottom: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            animation: slideInLeft 0.5s ease-out;
+        }
+
+        .activity-time {
+            font-size: 0.85rem;
+            opacity: 0.6;
+            margin-bottom: 5px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1DB954;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            max-width: 350px;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            background: #e74c3c;
+        }
+
+        .notification.success {
+            background: #27ae60;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .current-track {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .logo {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="notification" id="notification"></div>
+
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎵 NeighborlyVolume</div>
+            <div class="subtitle">Prawdziwa kontrola Spotify dla Twoich sąsiadów</div>
+            <div style="opacity: 0.7; margin-top: 10px;">
+                Sąsiedzka harmonia w cyfrowym wieku
+            </div>
+        </div>
+
+        <!-- CONNECTION STATUS -->
+        <div class="card">
+            <div class="connection-status" id="connection-status">
+                <div id="connect-section">
+                    <h2 style="margin-bottom: 20px;">🔗 Połącz ze Spotify</h2>
+                    <p style="margin-bottom: 25px; opacity: 0.8;">
+                        Zaloguj się do Spotify, aby umożliwić sąsiadom kontrolę głośności
+                    </p>
+                    <button class="spotify-btn" onclick="connectSpotify()">
+                        <span style="font-size: 1.2em;">🎵</span>
+                        Połącz ze Spotify
+                    </button>
+                </div>
+
+                <div id="connected-section" class="hidden">
+                    <h2 style="margin-bottom: 20px;">✅ Połączono ze Spotify</h2>
+                    <p>Witaj, <strong id="user-name">...</strong>!</p>
+                    <div id="current-track-display" class="current-track hidden">
+                        <img id="track-image" class="track-image" src="" alt="Album cover">
+                        <div class="track-info">
+                            <h3 id="track-name">...</h3>
+                            <p id="track-artist">...</p>
+                            <p style="opacity: 0.7;" id="track-album">...</p>
+                        </div>
+                    </div>
+                    <div class="volume-display" id="current-volume">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINK GENERATION -->
+        <div class="card hidden" id="controls-section">
+            <h2 style="margin-bottom: 20px;">🔗 Udostępnij Kontrolę Sąsiadom</h2>
+            
+            <div class="link-section">
+                <button class="btn primary" onclick="createShareLink()">
+                    📱 Wygeneruj Link dla Sąsiadów
+                </button>
+                
+                <div id="link-display" class="hidden">
+                    <div class="generated-link" id="share-url"></div>
+                    <div>
+                        <button class="btn" onclick="copyToClipboard()">📋 Kopiuj Link</button>
+                        <button class="btn" onclick="shareWhatsApp()">💬 Wyślij przez WhatsApp</button>
+                        <button class="btn" onclick="showQRCode()">📱 Pokaż QR Kod</button>
+                    </div>
+                    <p style="margin-top: 15px; opacity: 0.7; font-size: 0.9rem;">
+                        Wyślij ten link sąsiadom - będą mogli kontrolować głośność Twojej muzyki
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATS -->
+        <div class="card hidden" id="stats-section">
+            <h2 style="margin-bottom: 25px;">📊 Statystyki na Żywo</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="neighbors-count">0</div>
+                    <div class="stat-label">Aktywni sąsiedzi</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="volume-changes">0</div>
+                    <div class="stat-label">Zmiany głośności</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-messages">0</div>
+                    <div class="stat-label">Wiadomości otrzymane</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="session-time">0m</div>
+                    <div class="stat-label">Czas sesji</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTIVITY FEED -->
+        <div class="card hidden" id="activity-section">
+            <h2 style="margin-bottom: 20px;">📱 Aktywność Sąsiadów</h2>
+            <div class="activity-feed" id="activity-feed">
+                <div class="activity-item">
+                    <div class="activity-time">Oczekiwanie na aktywność...</div>
+                    <div>Udostępnij link sąsiadom, aby zobaczyć ich działania tutaj</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let appState = {
+            isConnected: false,
+            userId: null,
+            currentSession: null,
+            socket: null,
+            sessionStartTime: null
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎵 NeighborlyVolume starting...');
+            checkURLParams();
+            initializeWebSocket();
+        });
+
+        // Check URL parameters for auth results
+        function checkURLParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            if (urlParams.get('connected') === 'true') {
+                const userName = urlParams.get('user');
+                const userId = urlParams.get('userId');
+                
+                if (userName && userId) {
+                    handleSuccessfulAuth(userName, userId);
+                }
+                
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            if (urlParams.get('error')) {
+                const error = urlParams.get('error');
+                showNotification(`❌ Błąd autoryzacji: ${error}`, 'error');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
+        // Handle successful Spotify authentication
+        function handleSuccessfulAuth(userName, userId) {
+            appState.isConnected = true;
+            appState.userId = userId;
+            
+            document.getElementById('user-name').textContent = userName;
+            document.getElementById('connect-section').classList.add('hidden');
+            document.getElementById('connected-section').classList.remove('hidden');
+            document.getElementById('connection-status').classList.add('connected');
+            
+            // Show controls
+            document.getElementById('controls-section').classList.remove('hidden');
+            document.getElementById('stats-section').classList.remove('hidden');
+            document.getElementById('activity-section').classList.remove('hidden');
+            
+            showNotification(`🎵 Witaj ${userName}! Połączono ze Spotify`, 'success');
+            
+            // Start fetching current track info
+            startTrackUpdates();
+        }
+
+        // Connect to Spotify
+        function connectSpotify() {
+            showNotification('🔄 Przekierowywanie do Spotify...', 'info');
+            window.location.href = '/auth/login';
+        }
+
+        // Create share link
+        async function createShareLink() {
+            if (!appState.userId) {
+                showNotification('❌ Najpierw połącz się ze Spotify', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/create-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: appState.userId })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    appState.currentSession = data.linkId;
+                    document.getElementById('share-url').textContent = data.shareLink;
+                    document.getElementById('link-display').classList.remove('hidden');
+                    
+                    showNotification('🔗 Link wygenerowany pomyślnie!', 'success');
+                    
+                    // Start session monitoring
+                    if (appState.socket) {
+                        appState.socket.emit('join_session', data.linkId);
+                    }
+                    
+                    appState.sessionStartTime = Date.now();
+                    startSessionTimer();
+                    
+                } else {
+                    throw new Error(data.error || 'Failed to create link');
+                }
+                
+            } catch (error) {
+                console.error('Create link error:', error);
+                showNotification('❌ Błąd tworzenia linku', 'error');
+            }
+        }
+
+        // Copy link to clipboard
+        function copyToClipboard() {
+            const link = document.getElementById('share-url').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                showNotification('📋 Link skopiowany!', 'success');
+            });
+        }
+
+        // Share via WhatsApp
+        function shareWhatsApp() {
+            const link = document.getElementById('share-url').textContent;
+            const message = `🎵 Hej! Jeśli muzyka przeszkadza, możesz kontrolować głośność: ${link}\n\nTo NeighborlyVolume - sąsiedzka harmonia! 😊`;
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+            
+            showNotification('💬 WhatsApp otwarty!', 'success');
+        }
+
+        // Show QR code (placeholder)
+        function showQRCode() {
+            showNotification('📱 QR kod - wkrótce!', 'info');
+        }
+
+        // Start track updates
+        function startTrackUpdates() {
+            if (!appState.currentSession) return;
+            
+            updateCurrentTrack();
+            setInterval(updateCurrentTrack, 5000); // Update every 5 seconds
+        }
+
+        // Update current track info
+        async function updateCurrentTrack() {
+            if (!appState.currentSession) return;
+            
+            try {
+                const response = await fetch(`/api/status/${appState.currentSession}`);
+                const data = await response.json();
+                
+                if (data.track) {
+                    document.getElementById('track-name').textContent = data.track.name;
+                    document.getElementById('track-artist').textContent = data.track.artist;
+                    document.getElementById('track-album').textContent = data.track.album || '';
+                    
+                    if (data.track.image) {
+                        document.getElementById('track-image').src = data.track.image;
+                        document.getElementById('current-track-display').classList.remove('hidden');
+                    }
+                }
+                
+                if (data.volume !== undefined) {
+                    document.getElementById('current-volume').textContent = `${data.volume}%`;
+                    
+                    // Update volume color based on level
+                    const volumeEl = document.getElementById('current-volume');
+                    if (data.volume === 0) volumeEl.style.color = '#666';
+                    else if (data.volume <= 30) volumeEl.style.color = '#1DB954';
+                    else if (data.volume <= 70) volumeEl.style.color = '#FFC107';
+                    else volumeEl.style.color = '#FF5722';
+                }
+                
+                // Update stats
+                document.getElementById('neighbors-count').textContent = data.neighbors || 0;
+                
+            } catch (error) {
+                console.error('Track update error:', error);
+            }
+        }
+
+        // Initialize WebSocket
+        function initializeWebSocket() {
+            appState.socket = io();
+            
+            appState.socket.on('connect', () => {
+                console.log('🔌 WebSocket connected');
+            });
+            
+            appState.socket.on('disconnect', () => {
+                console.log('❌ WebSocket disconnected');
+            });
+            
+            // Listen for neighbor actions
+            appState.socket.on('session_update', (data) => {
+                if (data.type === 'neighbor_action') {
+                    handleNeighborAction(data.data);
+                }
+            });
+        }
+
+        // Handle neighbor action
+        function handleNeighborAction(action) {
+            // Update stats
+            const currentChanges = parseInt(document.getElementById('volume-changes').textContent) || 0;
+            const currentMessages = parseInt(document.getElementById('total-messages').textContent) || 0;
+            
+            if (action.action === 'volume_change') {
+                document.getElementById('volume-changes').textContent = currentChanges + 1;
+            }
+            
+            if (action.message) {
+                document.getElementById('total-messages').textContent = currentMessages + 1;
+            }
+            
+            // Add to activity feed
+            const time = new Date(action.timestamp).toLocaleTimeString('pl-PL', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            let activityText = '';
+            if (action.action === 'volume_change') {
+                activityText = `🔊 ${action.neighborId} zmienił głośność na ${action.volume}%`;
+            } else if (action.message) {
+                activityText = `💬 ${action.neighborId}: "${action.message}"`;
+            }
+            
+            if (activityText) {
+                addActivityItem(time, activityText);
+            }
+            
+            // Show notification
+            if (action.action === 'volume_change') {
+                showNotification(`🔊 Sąsiad ustawił głośność: ${action.volume}%`, 'info');
+            } else if (action.message) {
+                showNotification(`💬 Wiadomość od sąsiada: ${action.message}`, 'info');
+            }
+        }
+
+        // Add activity item
+        function addActivityItem(time, text) {
+            const feed = document.getElementById('activity-feed');
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `
+                <div class="activity-time">${time}</div>
+                <div>${text}</div>
+            `;
+            
+            feed.insertBefore(item, feed.firstChild);
+            
+            // Keep only last 20 items
+            const items = feed.querySelectorAll('.activity-item');
+            if (items.length > 20) {
+                items[items.length - 1].remove();
+            }
+        }
+
+        // Start session timer
+        function startSessionTimer() {
+            setInterval(() => {
+                if (appState.sessionStartTime) {
+                    const elapsed = Date.now() - appState.sessionStartTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    document.getElementById('session-time').textContent = `${minutes}m`;
+                }
+            }, 60000); // Update every minute
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
