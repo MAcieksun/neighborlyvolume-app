@@ -1,0 +1,21 @@
+{
+  "name": "neighborlyvolume",
+  "version": "1.0.0",
+  "description": "Sąsiedzka kontrola głośności Spotify",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "axios": "^1.6.0",
+    "uuid": "^9.0.0",
+    "socket.io": "^4.7.4"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
