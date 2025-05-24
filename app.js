@@ -245,13 +245,14 @@ app.put('/api/control/:linkId', async (req, res) => {
         }
         
         // Create neighbor action
-        const neighborAction = {
-            neighborId: neighborId || 'Anonymous',
-            action: action || 'volume_change',
-            volume: volume,
-            message: message,
-            timestamp: new Date()
-        };
+const neighborAction = {
+    neighborId: neighborId || 'Anonymous',
+    action: action || 'volume_change',
+    volume: volume,
+    message: message,
+    author: req.body.author || '',
+    timestamp: new Date()
+};
         
         console.log('📝 CREATING NEIGHBOR ACTION:', neighborAction);
         
