@@ -743,9 +743,10 @@ function handleNeighborAction(action) {
         document.getElementById('volume-changes').textContent = currentChanges + 1;
     }
     
-    if (action.message) {
-        document.getElementById('total-messages').textContent = currentMessages + 1;
-    }
+if (action.message) {
+    const authorText = action.author ? ` ${action.author}` : '';
+    activityText = `💬 ${action.neighborId}: "${action.message}"${authorText}`;
+}
     
     // Add to activity feed
     const time = new Date(action.timestamp).toLocaleTimeString('pl-PL', {
