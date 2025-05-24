@@ -440,7 +440,9 @@ app.put('/api/control/:linkId', async (req, res) => {
     
     try {
         // Check authorization
-        const permissionCheck = authManager.checkPermission(linkId, neighborId, 'volume_control', { volume });
+        const actionType = volume !== undefined ? 'volume_control' : 'send_message';
+        const permissionCheck = authManager.checkPermission(linkId, neighborId, actionType, { volume });
+        
         if (!permissionCheck.allowed) {
             console.log(`❌ Permission denied for ${neighborId}: ${permissionCheck.reason}`);
             return res.status(403).json({ 
@@ -449,20 +451,23 @@ app.put('/api/control/:linkId', async (req, res) => {
             });
         }
         
-        // Rate limiting
-        if (!rateLimiter.canAdjustVolume(neighborId)) {
-            const timeUntilRefill = rateLimiter.getTimeUntilRefill(neighborId);
-            console.log(`❌ Rate limited: ${neighborId}, next token in ${timeUntilRefill}s`);
-            
-            return res.status(429).json({ 
-                error: 'Rate limited', 
-                message: `Za dużo zmian głośności. Spróbuj ponownie za ${timeUntilRefill} sekund.`,
-                retryAfter: timeUntilRefill,
-                remainingTokens: rateLimiter.getRemainingTokens(neighborId)
-            });
-        }
-        
+        // Handle VOLUME CHANGE
         if (volume !== undefined) {
+            console.log(`🔊 Processing volume change: ${volume}%`);
+            
+            // Rate limiting for volume changes
+            if (!rateLimiter.canAdjustVolume(neighborId)) {
+                const timeUntilRefill = rateLimiter.getTimeUntilRefill(neighborId);
+                console.log(`❌ Rate limited: ${neighborId}, next token in ${timeUntilRefill}s`);
+                
+                return res.status(429).json({ 
+                    error: 'Rate limited', 
+                    message: `Za dużo zmian głośności. Spróbuj ponownie za ${timeUntilRefill} sekund.`,
+                    retryAfter: timeUntilRefill,
+                    remainingTokens: rateLimiter.getRemainingTokens(neighborId)
+                });
+            }
+            
             // Use conflict resolver for smart volume control
             const success = conflictResolver.handleVolumeChange(linkId, neighborId, volume);
             
@@ -474,10 +479,24 @@ app.put('/api/control/:linkId', async (req, res) => {
             authManager.incrementUsage(linkId, neighborId, 'volume');
         }
         
+        // Handle MESSAGE ONLY (emoji, thank you, etc.)
+        if (volume === undefined && (action === 'emoji_message' || action === 'thank_you' || message)) {
+            console.log(`💬 Processing message: ${action} - "${message}"`);
+            
+            // Light rate limiting for messages (more permissive)
+            if (!rateLimiter.canAdjustVolume(neighborId)) {
+                // Allow messages even if volume is rate limited, but log it
+                console.log(`⚠️ Message sent while volume rate limited: ${neighborId}`);
+            }
+            
+            // Update usage stats
+            authManager.incrementUsage(linkId, neighborId, 'message');
+        }
+        
         // Add to neighbor actions history
         const neighborAction = {
             neighborId: neighborId || 'Anonymous',
-            action: action || 'volume_change',
+            action: action || (volume !== undefined ? 'volume_change' : 'message'),
             volume: volume,
             message: message,
             timestamp: new Date()
@@ -488,7 +507,7 @@ app.put('/api/control/:linkId', async (req, res) => {
         // Add to control history
         session.controlHistory.push({
             userId: neighborId,
-            action: action || 'volume_change',
+            action: action || (volume !== undefined ? 'volume_change' : 'message'),
             volume: volume,
             message: message,
             timestamp: Date.now()
@@ -499,30 +518,39 @@ app.put('/api/control/:linkId', async (req, res) => {
             type: 'neighbor_action',
             data: neighborAction,
             session: {
-                volume: volume,
+                volume: session.volume, // Current volume
                 neighbors: session.neighbors.length
             }
         });
         
         console.log(`✅ Control request processed for ${neighborId}`);
         
-        res.json({ 
-            success: true, 
-            volume: volume,
-            isPending: true,
-            message: 'Volume change scheduled',
-            remainingTokens: rateLimiter.getRemainingTokens(neighborId)
-        });
+        // Response based on action type
+        if (volume !== undefined) {
+            res.json({ 
+                success: true, 
+                volume: volume,
+                isPending: true,
+                message: 'Volume change scheduled',
+                remainingTokens: rateLimiter.getRemainingTokens(neighborId)
+            });
+        } else {
+            res.json({ 
+                success: true, 
+                action: action,
+                message: 'Message sent successfully',
+                timestamp: Date.now()
+            });
+        }
         
     } catch (error) {
-        console.error('💥 Volume control error:', error.response?.data || error.message);
+        console.error('💥 Control error:', error.response?.data || error.message);
         res.status(500).json({ 
-            error: 'Failed to control volume', 
+            error: 'Failed to process request', 
             details: error.message 
         });
     }
 });
-
 // ===== STATUS SESJI =====
 app.get('/api/status/:linkId', async (req, res) => {
     const { linkId } = req.params;
