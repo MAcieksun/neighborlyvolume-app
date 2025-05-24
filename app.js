@@ -30,6 +30,542 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ===== PRZECHOWYWANIE SESJI (TYMCZASOWE) =====
 const activeSessions = new Map();
 const userTokens = new Map();
+// ===== DODAJ DO app.js - SYSTEM AUTORYZACJI =====
+
+// Dodaj po linii: const userTokens = new Map();
+const neighborAuthorizations = new Map(); // linkId -> authorizations
+const emergencyOverrides = new Map(); // linkId -> override status
+
+// ===== KLASA AUTHORIZATION MANAGER =====
+class AuthorizationManager {
+    constructor() {
+        this.maxNeighbors = 10; // Max 10 sąsiadów na sesję
+        this.defaultDailyLimit = 20; // 20 zmian głośności dziennie
+        this.emergencyOverrideDuration = 300000; // 5 minut
+        
+        console.log('🔐 Authorization Manager initialized');
+    }
+    
+    // Tworzenie nowej sesji z autoryzacjami
+    createSessionAuth(linkId, ownerId) {
+        const sessionAuth = {
+            ownerId: ownerId,
+            createdAt: Date.now(),
+            neighbors: new Map(), // neighborId -> permissions
+            pendingInvites: new Map(), // inviteCode -> neighborData
+            emergencyMode: false,
+            emergencyUntil: null,
+            sessionSettings: {
+                maxVolume: 100,
+                minVolume: 0,
+                quietHours: {
+                    start: 22, // 22:00
+                    end: 8,    // 8:00
+                    maxVolume: 30
+                },
+                autoAcceptInvites: false,
+                requireOwnerApproval: true
+            }
+        };
+        
+        neighborAuthorizations.set(linkId, sessionAuth);
+        return sessionAuth;
+    }
+    
+    // Generowanie kodu zaproszenia (6-cyfrowy)
+    generateInviteCode() {
+        return Math.random().toString(36).substr(2, 6).toUpperCase();
+    }
+    
+    // Właściciel tworzy zaproszenie dla sąsiada
+    createNeighborInvite(linkId, neighborName, permissions = null) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth) return null;
+        
+        const inviteCode = this.generateInviteCode();
+        const defaultPermissions = {
+            canControlVolume: true,
+            canSendMessages: true,
+            dailyVolumeLimit: this.defaultDailyLimit,
+            volumeRange: {
+                min: sessionAuth.sessionSettings.minVolume,
+                max: sessionAuth.sessionSettings.maxVolume
+            },
+            quietHoursRespect: true,
+            emergencyOverride: false, // Tylko właściciel ma to domyślnie
+            expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24h
+        };
+        
+        const invite = {
+            inviteCode: inviteCode,
+            neighborName: neighborName,
+            permissions: permissions || defaultPermissions,
+            createdAt: Date.now(),
+            createdBy: sessionAuth.ownerId,
+            used: false
+        };
+        
+        sessionAuth.pendingInvites.set(inviteCode, invite);
+        
+        console.log(`📧 Invite created: ${inviteCode} for ${neighborName} in session ${linkId}`);
+        return invite;
+    }
+    
+    // Sąsiad dołącza używając kodu
+    acceptInvite(inviteCode, neighborId, neighborDeviceInfo = {}) {
+        // Znajdź sesję z tym kodem
+        for (const [linkId, sessionAuth] of neighborAuthorizations.entries()) {
+            const invite = sessionAuth.pendingInvites.get(inviteCode);
+            
+            if (invite && !invite.used && invite.expiresAt > Date.now()) {
+                // Sprawdź czy sesja nie jest pełna
+                if (sessionAuth.neighbors.size >= this.maxNeighbors) {
+                    return { success: false, error: 'Session is full' };
+                }
+                
+                // Dodaj sąsiada do sesji
+                const neighborData = {
+                    neighborId: neighborId,
+                    neighborName: invite.neighborName,
+                    permissions: invite.permissions,
+                    joinedAt: Date.now(),
+                    deviceInfo: neighborDeviceInfo,
+                    dailyUsage: {
+                        date: new Date().toDateString(),
+                        volumeChanges: 0,
+                        messagesSet: 0
+                    },
+                    status: sessionAuth.sessionSettings.requireOwnerApproval ? 'pending' : 'active'
+                };
+                
+                sessionAuth.neighbors.set(neighborId, neighborData);
+                invite.used = true;
+                invite.usedBy = neighborId;
+                invite.usedAt = Date.now();
+                
+                console.log(`✅ Neighbor ${neighborId} joined session ${linkId} using invite ${inviteCode}`);
+                
+                // Powiadom właściciela
+                const session = activeSessions.get(linkId);
+                if (session) {
+                    io.emit(`session_${linkId}`, {
+                        type: 'neighbor_joined',
+                        neighborId: neighborId,
+                        neighborName: invite.neighborName,
+                        needsApproval: sessionAuth.sessionSettings.requireOwnerApproval,
+                        message: `🏠 ${invite.neighborName} dołączył jako sąsiad`
+                    });
+                }
+                
+                return { 
+                    success: true, 
+                    linkId: linkId,
+                    sessionAuth: sessionAuth,
+                    permissions: invite.permissions,
+                    needsApproval: sessionAuth.sessionSettings.requireOwnerApproval
+                };
+            }
+        }
+        
+        return { success: false, error: 'Invalid or expired invite code' };
+    }
+    
+    // Sprawdź czy sąsiad ma pozwolenie na daną akcję
+    checkPermission(linkId, neighborId, action, params = {}) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth) return { allowed: false, reason: 'Session not found' };
+        
+        // Właściciel ma zawsze pełne uprawnienia
+        if (neighborId === sessionAuth.ownerId) {
+            return { allowed: true, reason: 'Owner privileges' };
+        }
+        
+        const neighbor = sessionAuth.neighbors.get(neighborId);
+        if (!neighbor) return { allowed: false, reason: 'Neighbor not found' };
+        
+        if (neighbor.status !== 'active') {
+            return { allowed: false, reason: 'Neighbor not approved' };
+        }
+        
+        // Sprawdź emergency mode
+        if (sessionAuth.emergencyMode && !neighbor.permissions.emergencyOverride) {
+            return { allowed: false, reason: 'Emergency mode active - only owner can control' };
+        }
+        
+        switch (action) {
+            case 'volume_control':
+                return this.checkVolumePermission(sessionAuth, neighbor, params.volume);
+                
+            case 'send_message':
+                return this.checkMessagePermission(sessionAuth, neighbor);
+                
+            case 'emergency_override':
+                return { 
+                    allowed: neighbor.permissions.emergencyOverride,
+                    reason: neighbor.permissions.emergencyOverride ? 'Allowed' : 'No emergency override permission'
+                };
+                
+            default:
+                return { allowed: false, reason: 'Unknown action' };
+        }
+    }
+    
+    checkVolumePermission(sessionAuth, neighbor, requestedVolume) {
+        if (!neighbor.permissions.canControlVolume) {
+            return { allowed: false, reason: 'No volume control permission' };
+        }
+        
+        // Sprawdź daily limit
+        const today = new Date().toDateString();
+        if (neighbor.dailyUsage.date !== today) {
+            // Reset daily usage
+            neighbor.dailyUsage = {
+                date: today,
+                volumeChanges: 0,
+                messagesSet: 0
+            };
+        }
+        
+        if (neighbor.dailyUsage.volumeChanges >= neighbor.permissions.dailyVolumeLimit) {
+            return { 
+                allowed: false, 
+                reason: `Daily limit reached (${neighbor.permissions.dailyVolumeLimit} changes)`,
+                resetAt: new Date(Date.now() + 24*60*60*1000).toISOString()
+            };
+        }
+        
+        // Sprawdź volume range
+        const { min, max } = neighbor.permissions.volumeRange;
+        if (requestedVolume < min || requestedVolume > max) {
+            return { 
+                allowed: false, 
+                reason: `Volume out of allowed range (${min}%-${max}%)` 
+            };
+        }
+        
+        // Sprawdź quiet hours
+        if (neighbor.permissions.quietHoursRespect) {
+            const hour = new Date().getHours();
+            const { start, end, maxVolume } = sessionAuth.sessionSettings.quietHours;
+            
+            const isQuietHours = (start > end) ? 
+                (hour >= start || hour < end) : 
+                (hour >= start && hour < end);
+                
+            if (isQuietHours && requestedVolume > maxVolume) {
+                return { 
+                    allowed: false, 
+                    reason: `Quiet hours active (${start}:00-${end}:00) - max ${maxVolume}%` 
+                };
+            }
+        }
+        
+        return { allowed: true, reason: 'Permission granted' };
+    }
+    
+    checkMessagePermission(sessionAuth, neighbor) {
+        if (!neighbor.permissions.canSendMessages) {
+            return { allowed: false, reason: 'No message permission' };
+        }
+        
+        // Można dodać rate limiting dla wiadomości
+        return { allowed: true, reason: 'Message permission granted' };
+    }
+    
+    // Właściciel zatwierdza sąsiada
+    approveNeighbor(linkId, ownerId, neighborId) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth || sessionAuth.ownerId !== ownerId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+        
+        const neighbor = sessionAuth.neighbors.get(neighborId);
+        if (!neighbor) {
+            return { success: false, error: 'Neighbor not found' };
+        }
+        
+        neighbor.status = 'active';
+        neighbor.approvedAt = Date.now();
+        
+        // Powiadom sąsiada
+        io.emit(`neighbor_${neighborId}`, {
+            type: 'approval_received',
+            linkId: linkId,
+            message: '✅ Właściciel zatwierdził Twój dostęp!',
+            permissions: neighbor.permissions
+        });
+        
+        console.log(`✅ Owner ${ownerId} approved neighbor ${neighborId} in session ${linkId}`);
+        return { success: true };
+    }
+    
+    // Emergency override - właściciel przejmuje kontrolę
+    activateEmergencyOverride(linkId, ownerId, duration = null) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth || sessionAuth.ownerId !== ownerId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+        
+        const overrideDuration = duration || this.emergencyOverrideDuration;
+        
+        sessionAuth.emergencyMode = true;
+        sessionAuth.emergencyUntil = Date.now() + overrideDuration;
+        
+        // Powiadom wszystkich sąsiadów
+        io.emit(`session_${linkId}`, {
+            type: 'emergency_override_activated',
+            ownerId: ownerId,
+            duration: overrideDuration,
+            message: '🚨 Właściciel aktywował tryb awaryjny - kontrola zablokowana'
+        });
+        
+        // Auto-wyłącz po czasie
+        setTimeout(() => {
+            this.deactivateEmergencyOverride(linkId, ownerId);
+        }, overrideDuration);
+        
+        console.log(`🚨 Emergency override activated in session ${linkId} for ${overrideDuration}ms`);
+        return { success: true, duration: overrideDuration };
+    }
+    
+    deactivateEmergencyOverride(linkId, ownerId) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth || sessionAuth.ownerId !== ownerId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+        
+        sessionAuth.emergencyMode = false;
+        sessionAuth.emergencyUntil = null;
+        
+        io.emit(`session_${linkId}`, {
+            type: 'emergency_override_deactivated',
+            message: '✅ Tryb awaryjny wyłączony - normalna kontrola przywrócona'
+        });
+        
+        console.log(`✅ Emergency override deactivated in session ${linkId}`);
+        return { success: true };
+    }
+    
+    // Aktualizuj daily usage
+    incrementUsage(linkId, neighborId, type) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth) return;
+        
+        const neighbor = sessionAuth.neighbors.get(neighborId);
+        if (!neighbor) return;
+        
+        const today = new Date().toDateString();
+        if (neighbor.dailyUsage.date !== today) {
+            neighbor.dailyUsage = {
+                date: today,
+                volumeChanges: 0,
+                messagesSet: 0
+            };
+        }
+        
+        if (type === 'volume') {
+            neighbor.dailyUsage.volumeChanges++;
+        } else if (type === 'message') {
+            neighbor.dailyUsage.messagesSet++;
+        }
+    }
+    
+    // Pobierz stats autoryzacji
+    getAuthStats(linkId) {
+        const sessionAuth = neighborAuthorizations.get(linkId);
+        if (!sessionAuth) return null;
+        
+        return {
+            ownerId: sessionAuth.ownerId,
+            neighborsCount: sessionAuth.neighbors.size,
+            pendingInvites: sessionAuth.pendingInvites.size,
+            emergencyMode: sessionAuth.emergencyMode,
+            sessionSettings: sessionAuth.sessionSettings,
+            neighbors: Array.from(sessionAuth.neighbors.values()).map(n => ({
+                neighborId: n.neighborId,
+                neighborName: n.neighborName,
+                status: n.status,
+                joinedAt: n.joinedAt,
+                dailyUsage: n.dailyUsage,
+                permissions: n.permissions
+            }))
+        };
+    }
+}
+
+// Inicjalizacja
+const authManager = new AuthorizationManager();
+
+// ===== AKTUALIZUJ ENDPOINT TWORZENIA LINKU =====
+// Zastąp istniejący endpoint '/api/create-link':
+
+app.post('/api/create-link', async (req, res) => {
+    const { userId } = req.body;
+    
+    console.log(`🔗 Creating share link for user: ${userId}`);
+    
+    const userToken = userTokens.get(userId);
+    if (!userToken) {
+        console.log(`❌ User ${userId} not authenticated`);
+        return res.status(401).json({ error: 'User not authenticated' });
+    }
+    
+    try {
+        // Sprawdź status odtwarzacza
+        const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
+            headers: { 'Authorization': `Bearer ${userToken.access_token}` }
+        });
+        
+        const linkId = uuidv4();
+        const shareLink = `${BASE_URL}/control/${linkId}`;
+        
+        // Utwórz sesję muzyczną
+        activeSessions.set(linkId, {
+            userId: userId,
+            accessToken: userToken.access_token,
+            createdAt: new Date(),
+            neighbors: [],
+            currentTrack: playerResponse.data?.item || null,
+            isPlaying: playerResponse.data?.is_playing || false,
+            volume: playerResponse.data?.device?.volume_percent || 50,
+            lastController: null,
+            lastVolumeChange: null,
+            controlHistory: []
+        });
+        
+        // NOWE: Utwórz system autoryzacji dla sesji
+        const sessionAuth = authManager.createSessionAuth(linkId, userId);
+        
+        console.log(`✅ Share link created: ${linkId} for user ${userId}`);
+        console.log(`🔗 Share URL: ${shareLink}`);
+        console.log(`🔐 Authorization system initialized for session`);
+        
+        res.json({ 
+            success: true, 
+            linkId, 
+            shareLink,
+            authStats: authManager.getAuthStats(linkId),
+            currentStatus: {
+                track: playerResponse.data?.item,
+                isPlaying: playerResponse.data?.is_playing,
+                volume: playerResponse.data?.device?.volume_percent
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Create link error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to create link' });
+    }
+});
+
+// ===== NOWE API ENDPOINTS =====
+
+// Właściciel tworzy zaproszenie dla sąsiada
+app.post('/api/invite-neighbor/:linkId', (req, res) => {
+    const { linkId } = req.params;
+    const { userId, neighborName, permissions } = req.body;
+    
+    const session = activeSessions.get(linkId);
+    if (!session || session.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    const invite = authManager.createNeighborInvite(linkId, neighborName, permissions);
+    
+    if (invite) {
+        console.log(`📧 Invite created by ${userId}: ${invite.inviteCode}`);
+        res.json({ 
+            success: true, 
+            invite: {
+                inviteCode: invite.inviteCode,
+                neighborName: invite.neighborName,
+                expiresAt: invite.expiresAt,
+                inviteLink: `${BASE_URL}/join/${invite.inviteCode}`
+            }
+        });
+    } else {
+        res.status(500).json({ error: 'Failed to create invite' });
+    }
+});
+
+// Sąsiad dołącza używając kodu
+app.post('/api/join-session', (req, res) => {
+    const { inviteCode, neighborId, neighborDeviceInfo } = req.body;
+    
+    if (!inviteCode || !neighborId) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const result = authManager.acceptInvite(inviteCode, neighborId, neighborDeviceInfo);
+    
+    if (result.success) {
+        console.log(`✅ Neighbor ${neighborId} successfully joined session`);
+        res.json({
+            success: true,
+            linkId: result.linkId,
+            permissions: result.permissions,
+            needsApproval: result.needsApproval,
+            redirectUrl: `${BASE_URL}/control/${result.linkId}`
+        });
+    } else {
+        res.status(400).json({ error: result.error });
+    }
+});
+
+// Właściciel zatwierdza sąsiada
+app.post('/api/approve-neighbor/:linkId', (req, res) => {
+    const { linkId } = req.params;
+    const { userId, neighborId } = req.body;
+    
+    const session = activeSessions.get(linkId);
+    if (!session || session.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    const result = authManager.approveNeighbor(linkId, userId, neighborId);
+    
+    if (result.success) {
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: result.error });
+    }
+});
+
+// Emergency override
+app.post('/api/emergency-override/:linkId', (req, res) => {
+    const { linkId } = req.params;
+    const { userId, action, duration } = req.body; // action: 'activate' | 'deactivate'
+    
+    const session = activeSessions.get(linkId);
+    if (!session || session.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    let result;
+    if (action === 'activate') {
+        result = authManager.activateEmergencyOverride(linkId, userId, duration);
+    } else {
+        result = authManager.deactivateEmergencyOverride(linkId, userId);
+    }
+    
+    if (result.success) {
+        res.json(result);
+    } else {
+        res.status(400).json({ error: result.error });
+    }
+});
+
+// Pobierz authorization stats
+app.get('/api/auth-stats/:linkId', (req, res) => {
+    const { linkId } = req.params;
+    const stats = authManager.getAuthStats(linkId);
+    
+    if (stats) {
+        res.json(stats);
+    } else {
+        res.status(404).json({ error: 'Session not found' });
+    }
+});
 
 // ===== NOWE: RATE LIMITING CLASS =====
 class VolumeRateLimiter {
