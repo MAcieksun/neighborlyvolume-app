@@ -357,7 +357,15 @@ app.get('/api/status/:linkId', async (req, res) => {
 app.get('/control/:linkId', (req, res) => {
     const { linkId } = req.params;
     console.log('🎛️ CONTROL PAGE REQUEST:', { linkId });
-    res.sendFile(path.join(__dirname, 'public', 'neighbor.html'));
+    
+    // Set proper content type
+    res.setHeader('Content-Type', 'text/html');
+    res.sendFile(path.join(__dirname, 'public', 'neighbor.html'), (err) => {
+        if (err) {
+            console.error('❌ Error sending neighbor.html:', err);
+            res.status(500).send('Page not found');
+        }
+    });
 });
 
 // ===== GŁÓWNA STRONA =====
