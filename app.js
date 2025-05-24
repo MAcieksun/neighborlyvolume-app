@@ -968,117 +968,91 @@ app.post('/api/create-link', async (req, res) => {
 });
 
 // ===== KONTROLA GŁOŚNOŚCI (ZAKTUALIZOWANA Z NOWYM SYSTEMEM) =====
-app.put('/api/control/:linkId', async (req, res) => {
+app.get('/api/status/:linkId', async (req, res) => {
     const { linkId } = req.params;
-    const { volume, neighborId, action, message } = req.body;
-    
-    console.log(`🎛️ Control request: ${action || 'volume'} from ${neighborId} in session ${linkId}`);
-    
     const session = activeSessions.get(linkId);
+    
     if (!session) {
-        console.log(`❌ Session ${linkId} not found`);
+        console.log(`❌ Status request for non-existent session: ${linkId}`);
         return res.status(404).json({ error: 'Session not found' });
     }
     
     try {
-        if (volume !== undefined) {
-            console.log(`🔊 Volume control request: ${neighborId} wants ${volume}%`);
-            
-            // Sprawdź rate limiting
-            if (!rateLimiter.canAdjustVolume(neighborId)) {
-                const waitTime = rateLimiter.getTimeUntilRefill(neighborId);
-                const remainingTokens = rateLimiter.getRemainingTokens(neighborId);
-                
-                console.log(`⏰ Rate limit hit for ${neighborId}: wait ${waitTime}s`);
-                
-                return res.status(429).json({ 
-                    error: 'Rate limit exceeded',
-                    message: `Za dużo zmian! Poczekaj ${waitTime} sekund.`,
-                    retryAfter: waitTime,
-                    remainingTokens: remainingTokens
-                });
-            }
-            
-            // Użyj conflict resolver
-            const success = conflictResolver.handleVolumeChange(linkId, neighborId, volume);
-            
-            if (success) {
-                // Zapisz info o kontrolerze
-                session.lastController = neighborId;
-                session.controlHistory.push({
-                    userId: neighborId,
-                    volume: volume,
-                    timestamp: Date.now(),
-                    action: 'volume_change'
-                });
-                
-                // Ogranicz historię do 20 ostatnich zmian
-                if (session.controlHistory.length > 20) {
-                    session.controlHistory = session.controlHistory.slice(-20);
-                }
-                
-                // Powiadom o nowym kontrolerze
-                io.emit(`session_${linkId}`, {
-                    type: 'controller_changed',
-                    currentController: neighborId,
-                    volume: volume,
-                    timestamp: Date.now()
-                });
-                
-                console.log(`✅ Volume control accepted for ${neighborId}`);
-                
-                res.json({ 
-                    success: true, 
-                    status: 'pending',
-                    message: 'Volume change scheduled',
-                    willApplyIn: 300,
-                    conflictStats: conflictResolver.getConflictStats(linkId)
-                });
-            } else {
-                console.log(`❌ Volume control failed for ${neighborId}`);
-                res.status(500).json({ error: 'Failed to process volume change' });
-            }
-            return;
+        console.log(`📊 Status request for session ${linkId}`);
+        
+        // Pobierz aktualny status z Spotify
+        const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
+            headers: { 'Authorization': `Bearer ${session.accessToken}` }
+        });
+        
+        const playerData = playerResponse.data;
+        
+        // Aktualizuj sesję
+        if (playerData) {
+            session.currentTrack = playerData.item;
+            session.isPlaying = playerData.is_playing;
+            session.volume = playerData.device?.volume_percent || session.volume;
         }
         
-        // Obsługa wiadomości (bez zmian)
-        if (message) {
-            console.log(`💬 Message from ${neighborId}: ${message}`);
-            
-            const neighborAction = {
-                neighborId: neighborId || 'Anonymous',
-                action: action || 'message',
-                message: message,
-                timestamp: new Date()
-            };
-            
-            session.neighbors.push(neighborAction);
-            
-            // Ogranicz historię wiadomości
-            if (session.neighbors.length > 50) {
-                session.neighbors = session.neighbors.slice(-50);
-            }
-            
-            // Wyślij update przez WebSocket
-            io.emit(`session_${linkId}`, {
-                type: 'neighbor_action',
-                data: neighborAction,
-                session: {
-                    volume: session.volume,
-                    neighbors: session.neighbors.length
-                }
-            });
-            
-            console.log(`✅ Message sent from ${neighborId}`);
-            res.json({ success: true });
-        }
+        const conflictStats = conflictResolver.getConflictStats(linkId);
+        const currentController = conflictResolver.getCurrentController(linkId);
+        
+        // NOWE: Dodaj authorization stats
+        const authStats = authManager.getAuthStats(linkId);
+        
+        console.log(`📊 Session ${linkId} status: ${session.volume}% volume, controller: ${currentController}`);
+        
+        res.json({
+            isPlaying: session.isPlaying,
+            volume: session.volume,
+            track: session.currentTrack ? {
+                name: session.currentTrack.name,
+                artist: session.currentTrack.artists[0]?.name,
+                album: session.currentTrack.album?.name,
+                image: session.currentTrack.album?.images[0]?.url
+            } : null,
+            neighbors: session.neighbors.length,
+            recentActions: session.neighbors.slice(-10),
+            currentController: currentController,
+            controlHistory: session.controlHistory.slice(-5),
+            conflictStats: conflictStats,
+            sessionInfo: {
+                createdAt: session.createdAt,
+                lastVolumeChange: session.lastVolumeChange,
+                totalVolumeChanges: session.controlHistory.length
+            },
+            // NOWE: Authorization info
+            authStats: authStats,
+            emergencyMode: authStats?.emergencyMode || false
+        });
         
     } catch (error) {
-        console.error('❌ Control error:', error.response?.data || error.message);
-        res.status(500).json({ error: 'Failed to process request' });
+        console.error('❌ Status error:', error.response?.data || error.message);
+        
+        // Fallback response
+        const conflictStats = conflictResolver.getConflictStats(linkId);
+        const currentController = conflictResolver.getCurrentController(linkId);
+        const authStats = authManager.getAuthStats(linkId);
+        
+        res.json({ 
+            isPlaying: session.isPlaying || false, 
+            volume: session.volume || 50, 
+            track: null,
+            neighbors: session.neighbors.length || 0,
+            recentActions: session.neighbors.slice(-10) || [],
+            currentController: currentController,
+            controlHistory: session.controlHistory.slice(-5) || [],
+            conflictStats: conflictStats,
+            sessionInfo: {
+                createdAt: session.createdAt,
+                lastVolumeChange: session.lastVolumeChange,
+                totalVolumeChanges: session.controlHistory.length
+            },
+            authStats: authStats,
+            emergencyMode: authStats?.emergencyMode || false
+        });
     }
 });
-
 // ===== STATUS SESJI (ROZSZERZONY) =====
 app.get('/api/status/:linkId', async (req, res) => {
     const { linkId } = req.params;
@@ -1304,4 +1278,102 @@ app.get('/health', (req, res) => {
         rateLimiterUsers: rateLimiter.users.size,
         memory: process.memoryUsage()
     });
+});
+// ===== NOWY ENDPOINT: JOIN PAGE =====
+app.get('/join/:inviteCode', (req, res) => {
+    const { inviteCode } = req.params;
+    
+    // Sprawdź czy kod istnieje
+    let validInvite = null;
+    for (const [linkId, sessionAuth] of neighborAuthorizations.entries()) {
+        const invite = sessionAuth.pendingInvites.get(inviteCode);
+        if (invite && !invite.used && invite.expiresAt > Date.now()) {
+            validInvite = { linkId, invite };
+            break;
+        }
+    }
+    
+    if (!validInvite) {
+        // Strona błędu dla nieprawidłowego kodu
+        res.send(`
+            <!DOCTYPE html>
+            <html><head><title>Invalid Invite</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1>❌ Invalid Invite Code</h1>
+                <p>This invite code is invalid, expired, or already used.</p>
+                <p>Please ask your neighbor for a new invite.</p>
+            </body></html>
+        `);
+        return;
+    }
+    
+    // Prosta strona join
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Join NeighborlyVolume</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: Arial; text-align: center; padding: 20px; background: #1DB954; color: white; }
+                .container { max-width: 400px; margin: 0 auto; background: rgba(0,0,0,0.2); padding: 30px; border-radius: 15px; }
+                input { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 16px; }
+                button { background: white; color: #1DB954; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; width: 100%; }
+                button:hover { background: #f0f0f0; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎵 NeighborlyVolume</h1>
+                <h2>Join as ${validInvite.invite.neighborName}</h2>
+                <p>You've been invited to control your neighbor's music volume!</p>
+                
+                <input type="text" id="neighborId" placeholder="Your device name (e.g., John's Phone)" required>
+                <button onclick="joinSession()">Join Session</button>
+                
+                <div id="status" style="margin-top: 20px;"></div>
+            </div>
+            
+            <script>
+                async function joinSession() {
+                    const neighborId = document.getElementById('neighborId').value;
+                    if (!neighborId.trim()) {
+                        alert('Please enter your device name');
+                        return;
+                    }
+                    
+                    document.getElementById('status').innerHTML = '⏳ Joining...';
+                    
+                    try {
+                        const response = await fetch('/api/join-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                inviteCode: '${inviteCode}',
+                                neighborId: neighborId,
+                                neighborDeviceInfo: { userAgent: navigator.userAgent }
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            document.getElementById('status').innerHTML = '✅ Success! Redirecting...';
+                            window.location.href = data.redirectUrl + '?neighborId=' + encodeURIComponent(neighborId);
+                        } else {
+                            document.getElementById('status').innerHTML = '❌ ' + data.error;
+                        }
+                    } catch (error) {
+                        document.getElementById('status').innerHTML = '❌ Connection error';
+                    }
+                }
+                
+                // Enter key submit
+                document.getElementById('neighborId').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') joinSession();
+                });
+            </script>
+        </body>
+        </html>
+    `);
 });
