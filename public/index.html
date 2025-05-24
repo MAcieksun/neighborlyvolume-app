@@ -402,282 +402,408 @@
     </div>
 
     <script>
-        // Global state
-        let appState = {
-            isConnected: false,
-            userId: null,
-            currentSession: null,
-            socket: null,
-            sessionStartTime: null
-        };
+       // Global state
+let appState = {
+    isConnected: false,
+    userId: null,
+    currentSession: null,
+    socket: null,
+    sessionStartTime: null
+};
 
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎵 NeighborlyVolume starting...');
-            checkURLParams();
-            initializeWebSocket();
-        });
+// Initialize app
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎵 NeighborlyVolume starting...');
+    
+    // Try to restore session first
+    tryRestoreSession();
+    
+    checkURLParams();
+    initializeWebSocket();
+});
 
-        // Check URL parameters for auth results
-        function checkURLParams() {
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            if (urlParams.get('connected') === 'true') {
-                const userName = urlParams.get('user');
-                const userId = urlParams.get('userId');
-                
-                if (userName && userId) {
-                    handleSuccessfulAuth(userName, userId);
+// Try to restore session from localStorage
+async function tryRestoreSession() {
+    console.log('🔄 Trying to restore session...');
+    
+    const savedUserId = localStorage.getItem('neighborly_userId');
+    const savedUserName = localStorage.getItem('neighborly_userName'); 
+    const savedSessionId = localStorage.getItem('neighborly_sessionId');
+    
+    console.log('💾 Saved data:', { savedUserId, savedUserName, savedSessionId });
+    
+    if (savedUserId && savedUserName) {
+        console.log('✅ Found saved user data, checking if session is valid...');
+        
+        // Check if we have an active session
+        if (savedSessionId) {
+            try {
+                const response = await fetch(`/api/session/check/${savedSessionId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Session is still valid!', data);
+                    
+                    // Restore full state
+                    handleSuccessfulAuth(savedUserName, savedUserId, savedSessionId);
+                    return;
                 }
-                
-                // Clean URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-            
-            if (urlParams.get('error')) {
-                const error = urlParams.get('error');
-                showNotification(`❌ Błąd autoryzacji: ${error}`, 'error');
-                window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (error) {
+                console.log('❌ Session check failed:', error);
             }
         }
-
-        // Handle successful Spotify authentication
-        function handleSuccessfulAuth(userName, userId) {
-            appState.isConnected = true;
-            appState.userId = userId;
+        
+        // Check if user tokens are still valid (without session)
+        try {
+            const response = await fetch('/api/user/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: savedUserId })
+            });
             
-            document.getElementById('user-name').textContent = userName;
-            document.getElementById('connect-section').classList.add('hidden');
-            document.getElementById('connected-section').classList.remove('hidden');
-            document.getElementById('connection-status').classList.add('connected');
-            
-            // Show controls
-            document.getElementById('controls-section').classList.remove('hidden');
-            document.getElementById('stats-section').classList.remove('hidden');
-            document.getElementById('activity-section').classList.remove('hidden');
-            
-            showNotification(`🎵 Witaj ${userName}! Połączono ze Spotify`, 'success');
-            
-            // Start fetching current track info
-            startTrackUpdates();
-        }
-
-        // Connect to Spotify
-        function connectSpotify() {
-            showNotification('🔄 Przekierowywanie do Spotify...', 'info');
-            window.location.href = '/auth/login';
-        }
-
-        // Create share link
-        async function createShareLink() {
-            if (!appState.userId) {
-                showNotification('❌ Najpierw połącz się ze Spotify', 'error');
+            if (response.ok) {
+                console.log('✅ User tokens still valid, restoring connection...');
+                handleSuccessfulAuth(savedUserName, savedUserId);
                 return;
             }
-
-            try {
-                const response = await fetch('/api/create-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: appState.userId })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    appState.currentSession = data.linkId;
-                    document.getElementById('share-url').textContent = data.shareLink;
-                    document.getElementById('link-display').classList.remove('hidden');
-                    
-                    showNotification('🔗 Link wygenerowany pomyślnie!', 'success');
-                    
-                    // Start session monitoring
-                    if (appState.socket) {
-                        appState.socket.emit('join_session', data.linkId);
-                    }
-                    
-                    appState.sessionStartTime = Date.now();
-                    startSessionTimer();
-                    
-                } else {
-                    throw new Error(data.error || 'Failed to create link');
-                }
-                
-            } catch (error) {
-                console.error('Create link error:', error);
-                showNotification('❌ Błąd tworzenia linku', 'error');
-            }
+        } catch (error) {
+            console.log('❌ User check failed:', error);
         }
+        
+        console.log('🧹 Clearing invalid saved data...');
+        clearSavedSession();
+    }
+    
+    console.log('ℹ️ No valid session found, user needs to connect');
+}
 
-        // Copy link to clipboard
-        function copyToClipboard() {
-            const link = document.getElementById('share-url').textContent;
-            navigator.clipboard.writeText(link).then(() => {
-                showNotification('📋 Link skopiowany!', 'success');
-            });
+// Save session to localStorage
+function saveSession(userId, userName, sessionId = null) {
+    localStorage.setItem('neighborly_userId', userId);
+    localStorage.setItem('neighborly_userName', userName);
+    if (sessionId) {
+        localStorage.setItem('neighborly_sessionId', sessionId);
+    }
+    console.log('💾 Session saved to localStorage');
+}
+
+// Clear saved session
+function clearSavedSession() {
+    localStorage.removeItem('neighborly_userId');
+    localStorage.removeItem('neighborly_userName');
+    localStorage.removeItem('neighborly_sessionId');
+    console.log('🧹 Session cleared from localStorage');
+}
+
+// Check URL parameters for auth results
+function checkURLParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    if (urlParams.get('connected') === 'true') {
+        const userName = urlParams.get('user');
+        const userId = urlParams.get('userId');
+        
+        if (userName && userId) {
+            handleSuccessfulAuth(userName, userId);
         }
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    if (urlParams.get('error')) {
+        const error = urlParams.get('error');
+        showNotification(`❌ Błąd autoryzacji: ${error}`, 'error');
+        clearSavedSession(); // Clear any invalid session
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
 
-        // Share via WhatsApp
-        function shareWhatsApp() {
-            const link = document.getElementById('share-url').textContent;
-            const message = `🎵 Hej! Jeśli muzyka przeszkadza, możesz kontrolować głośność: ${link}\n\nTo NeighborlyVolume - sąsiedzka harmonia! 😊`;
-            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
-            
-            showNotification('💬 WhatsApp otwarty!', 'success');
+// Handle successful Spotify authentication
+function handleSuccessfulAuth(userName, userId, existingSessionId = null) {
+    appState.isConnected = true;
+    appState.userId = userId;
+    appState.currentSession = existingSessionId;
+    
+    // Save to localStorage
+    saveSession(userId, userName, existingSessionId);
+    
+    document.getElementById('user-name').textContent = userName;
+    document.getElementById('connect-section').classList.add('hidden');
+    document.getElementById('connected-section').classList.remove('hidden');
+    document.getElementById('connection-status').classList.add('connected');
+    
+    // Show controls
+    document.getElementById('controls-section').classList.remove('hidden');
+    document.getElementById('stats-section').classList.remove('hidden');
+    document.getElementById('activity-section').classList.remove('hidden');
+    
+    if (existingSessionId) {
+        // Restore existing session
+        document.getElementById('share-url').textContent = `${window.location.origin}/control/${existingSessionId}`;
+        document.getElementById('link-display').classList.remove('hidden');
+        
+        // Start session monitoring
+        if (appState.socket) {
+            appState.socket.emit('join_session', existingSessionId);
         }
+        
+        showNotification(`🎵 Sesja przywrócona! Witaj ${userName}`, 'success');
+        startTrackUpdates();
+    } else {
+        showNotification(`🎵 Witaj ${userName}! Połączono ze Spotify`, 'success');
+    }
+    
+    // Start fetching current track info
+    startTrackUpdates();
+}
 
-        // Show QR code (placeholder)
-        function showQRCode() {
-            showNotification('📱 QR kod - wkrótce!', 'info');
-        }
+// Connect to Spotify
+function connectSpotify() {
+    showNotification('🔄 Przekierowywanie do Spotify...', 'info');
+    clearSavedSession(); // Clear any old session before connecting
+    window.location.href = '/auth/login';
+}
 
-        // Start track updates
-        function startTrackUpdates() {
-            if (!appState.currentSession) return;
-            
-            updateCurrentTrack();
-            setInterval(updateCurrentTrack, 5000); // Update every 5 seconds
-        }
+// Disconnect function
+function disconnectSpotify() {
+    clearSavedSession();
+    
+    // Reset UI
+    appState.isConnected = false;
+    appState.userId = null;
+    appState.currentSession = null;
+    
+    document.getElementById('connect-section').classList.remove('hidden');
+    document.getElementById('connected-section').classList.add('hidden');
+    document.getElementById('connection-status').classList.remove('connected');
+    document.getElementById('controls-section').classList.add('hidden');
+    document.getElementById('stats-section').classList.add('hidden');
+    document.getElementById('activity-section').classList.add('hidden');
+    document.getElementById('link-display').classList.add('hidden');
+    
+    showNotification('👋 Rozłączono ze Spotify', 'info');
+}
 
-        // Update current track info
-        async function updateCurrentTrack() {
-            if (!appState.currentSession) return;
-            
-            try {
-                const response = await fetch(`/api/status/${appState.currentSession}`);
-                const data = await response.json();
-                
-                if (data.track) {
-                    document.getElementById('track-name').textContent = data.track.name;
-                    document.getElementById('track-artist').textContent = data.track.artist;
-                    document.getElementById('track-album').textContent = data.track.album || '';
-                    
-                    if (data.track.image) {
-                        document.getElementById('track-image').src = data.track.image;
-                        document.getElementById('current-track-display').classList.remove('hidden');
-                    }
-                }
-                
-                if (data.volume !== undefined) {
-                    document.getElementById('current-volume').textContent = `${data.volume}%`;
-                    
-                    // Update volume color based on level
-                    const volumeEl = document.getElementById('current-volume');
-                    if (data.volume === 0) volumeEl.style.color = '#666';
-                    else if (data.volume <= 30) volumeEl.style.color = '#1DB954';
-                    else if (data.volume <= 70) volumeEl.style.color = '#FFC107';
-                    else volumeEl.style.color = '#FF5722';
-                }
-                
-                // Update stats
-                document.getElementById('neighbors-count').textContent = data.neighbors || 0;
-                
-            } catch (error) {
-                console.error('Track update error:', error);
-            }
-        }
+// Create share link (updated)
+async function createShareLink() {
+    if (!appState.userId) {
+        showNotification('❌ Najpierw połącz się ze Spotify', 'error');
+        return;
+    }
 
-        // Initialize WebSocket
-        function initializeWebSocket() {
-            appState.socket = io();
-            
-            appState.socket.on('connect', () => {
-                console.log('🔌 WebSocket connected');
-            });
-            
-            appState.socket.on('disconnect', () => {
-                console.log('❌ WebSocket disconnected');
-            });
-            
-            // Listen for neighbor actions
-            appState.socket.on('session_update', (data) => {
-                if (data.type === 'neighbor_action') {
-                    handleNeighborAction(data.data);
-                }
-            });
-        }
+    try {
+        const response = await fetch('/api/create-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: appState.userId })
+        });
 
-        // Handle neighbor action
-        function handleNeighborAction(action) {
-            // Update stats
-            const currentChanges = parseInt(document.getElementById('volume-changes').textContent) || 0;
-            const currentMessages = parseInt(document.getElementById('total-messages').textContent) || 0;
+        const data = await response.json();
+        
+        if (data.success) {
+            appState.currentSession = data.linkId;
             
-            if (action.action === 'volume_change') {
-                document.getElementById('volume-changes').textContent = currentChanges + 1;
-            }
+            // Save session ID to localStorage
+            const savedUserName = localStorage.getItem('neighborly_userName');
+            saveSession(appState.userId, savedUserName, data.linkId);
             
-            if (action.message) {
-                document.getElementById('total-messages').textContent = currentMessages + 1;
-            }
+            document.getElementById('share-url').textContent = data.shareLink;
+            document.getElementById('link-display').classList.remove('hidden');
             
-            // Add to activity feed
-            const time = new Date(action.timestamp).toLocaleTimeString('pl-PL', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            showNotification('🔗 Link wygenerowany pomyślnie!', 'success');
             
-            let activityText = '';
-            if (action.action === 'volume_change') {
-                activityText = `🔊 ${action.neighborId} zmienił głośność na ${action.volume}%`;
-            } else if (action.message) {
-                activityText = `💬 ${action.neighborId}: "${action.message}"`;
-            }
-            
-            if (activityText) {
-                addActivityItem(time, activityText);
+            // Start session monitoring
+            if (appState.socket) {
+                appState.socket.emit('join_session', data.linkId);
             }
             
-            // Show notification
-            if (action.action === 'volume_change') {
-                showNotification(`🔊 Sąsiad ustawił głośność: ${action.volume}%`, 'info');
-            } else if (action.message) {
-                showNotification(`💬 Wiadomość od sąsiada: ${action.message}`, 'info');
+            appState.sessionStartTime = Date.now();
+            startSessionTimer();
+            
+        } else {
+            throw new Error(data.error || 'Failed to create link');
+        }
+        
+    } catch (error) {
+        console.error('Create link error:', error);
+        showNotification('❌ Błąd tworzenia linku', 'error');
+    }
+}
+
+// Copy link to clipboard
+function copyToClipboard() {
+    const link = document.getElementById('share-url').textContent;
+    navigator.clipboard.writeText(link).then(() => {
+        showNotification('📋 Link skopiowany!', 'success');
+    });
+}
+
+// Share via WhatsApp
+function shareWhatsApp() {
+    const link = document.getElementById('share-url').textContent;
+    const message = `🎵 Hej! Jeśli muzyka przeszkadza, możesz kontrolować głośność: ${link}\n\nTo NeighborlyVolume - sąsiedzka harmonia! 😊`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    
+    showNotification('💬 WhatsApp otwarty!', 'success');
+}
+
+// Show QR code (placeholder)
+function showQRCode() {
+    showNotification('📱 QR kod - wkrótce!', 'info');
+}
+
+// Start track updates
+function startTrackUpdates() {
+    if (!appState.currentSession) return;
+    
+    updateCurrentTrack();
+    setInterval(updateCurrentTrack, 5000); // Update every 5 seconds
+}
+
+// Update current track info
+async function updateCurrentTrack() {
+    if (!appState.currentSession) return;
+    
+    try {
+        const response = await fetch(`/api/status/${appState.currentSession}`);
+        const data = await response.json();
+        
+        if (data.track) {
+            document.getElementById('track-name').textContent = data.track.name;
+            document.getElementById('track-artist').textContent = data.track.artist;
+            document.getElementById('track-album').textContent = data.track.album || '';
+            
+            if (data.track.image) {
+                document.getElementById('track-image').src = data.track.image;
+                document.getElementById('current-track-display').classList.remove('hidden');
             }
         }
-
-        // Add activity item
-        function addActivityItem(time, text) {
-            const feed = document.getElementById('activity-feed');
-            const item = document.createElement('div');
-            item.className = 'activity-item';
-            item.innerHTML = `
-                <div class="activity-time">${time}</div>
-                <div>${text}</div>
-            `;
+        
+        if (data.volume !== undefined) {
+            document.getElementById('current-volume').textContent = `${data.volume}%`;
             
-            feed.insertBefore(item, feed.firstChild);
-            
-            // Keep only last 20 items
-            const items = feed.querySelectorAll('.activity-item');
-            if (items.length > 20) {
-                items[items.length - 1].remove();
-            }
+            // Update volume color based on level
+            const volumeEl = document.getElementById('current-volume');
+            if (data.volume === 0) volumeEl.style.color = '#666';
+            else if (data.volume <= 30) volumeEl.style.color = '#1DB954';
+            else if (data.volume <= 70) volumeEl.style.color = '#FFC107';
+            else volumeEl.style.color = '#FF5722';
         }
+        
+        // Update stats
+        document.getElementById('neighbors-count').textContent = data.neighbors || 0;
+        
+    } catch (error) {
+        console.error('Track update error:', error);
+        // If session is invalid, clear it
+        if (error.status === 404) {
+            clearSavedSession();
+            showNotification('❌ Sesja wygasła, połącz się ponownie', 'error');
+        }
+    }
+}
 
-        // Start session timer
-        function startSessionTimer() {
-            setInterval(() => {
-                if (appState.sessionStartTime) {
-                    const elapsed = Date.now() - appState.sessionStartTime;
-                    const minutes = Math.floor(elapsed / 60000);
-                    document.getElementById('session-time').textContent = `${minutes}m`;
-                }
-            }, 60000); // Update every minute
+// Initialize WebSocket
+function initializeWebSocket() {
+    appState.socket = io();
+    
+    appState.socket.on('connect', () => {
+        console.log('🔌 WebSocket connected');
+    });
+    
+    appState.socket.on('disconnect', () => {
+        console.log('❌ WebSocket disconnected');
+    });
+    
+    // Listen for neighbor actions
+    appState.socket.on('session_update', (data) => {
+        if (data.type === 'neighbor_action') {
+            handleNeighborAction(data.data);
         }
+    });
+}
 
-        // Show notification
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 4000);
+// Handle neighbor action
+function handleNeighborAction(action) {
+    // Update stats
+    const currentChanges = parseInt(document.getElementById('volume-changes').textContent) || 0;
+    const currentMessages = parseInt(document.getElementById('total-messages').textContent) || 0;
+    
+    if (action.action === 'volume_change') {
+        document.getElementById('volume-changes').textContent = currentChanges + 1;
+    }
+    
+    if (action.message) {
+        document.getElementById('total-messages').textContent = currentMessages + 1;
+    }
+    
+    // Add to activity feed
+    const time = new Date(action.timestamp).toLocaleTimeString('pl-PL', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    let activityText = '';
+    if (action.action === 'volume_change') {
+        activityText = `🔊 ${action.neighborId} zmienił głośność na ${action.volume}%`;
+    } else if (action.message) {
+        activityText = `💬 ${action.neighborId}: "${action.message}"`;
+    }
+    
+    if (activityText) {
+        addActivityItem(time, activityText);
+    }
+    
+    // Show notification
+    if (action.action === 'volume_change') {
+        showNotification(`🔊 Sąsiad ustawił głośność: ${action.volume}%`, 'info');
+    } else if (action.message) {
+        showNotification(`💬 Wiadomość od sąsiada: ${action.message}`, 'info');
+    }
+}
+
+// Add activity item
+function addActivityItem(time, text) {
+    const feed = document.getElementById('activity-feed');
+    const item = document.createElement('div');
+    item.className = 'activity-item';
+    item.innerHTML = `
+        <div class="activity-time">${time}</div>
+        <div>${text}</div>
+    `;
+    
+    feed.insertBefore(item, feed.firstChild);
+    
+    // Keep only last 20 items
+    const items = feed.querySelectorAll('.activity-item');
+    if (items.length > 20) {
+        items[items.length - 1].remove();
+    }
+}
+
+// Start session timer
+function startSessionTimer() {
+    setInterval(() => {
+        if (appState.sessionStartTime) {
+            const elapsed = Date.now() - appState.sessionStartTime;
+            const minutes = Math.floor(elapsed / 60000);
+            document.getElementById('session-time').textContent = `${minutes}m`;
         }
+    }, 60000); // Update every minute
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.classList.add('show');
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 4000);
+}
     </script>
 </body>
 </html>
