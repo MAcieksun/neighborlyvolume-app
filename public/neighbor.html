@@ -23,6 +23,17 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            transition: all 0.5s ease;
+        }
+
+        body.rainbow-mode {
+            background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 25%, #45b7d1 50%, #96ceb4 75%, #ffeaa7 100%);
+            animation: rainbowShift 3s ease-in-out infinite;
+        }
+
+        @keyframes rainbowShift {
+            0%, 100% { filter: hue-rotate(0deg); }
+            50% { filter: hue-rotate(180deg); }
         }
 
         .container {
@@ -63,7 +74,57 @@
             animation: fadeInUp 0.6s ease-out;
         }
 
-        /* NOWE: Control Indicators */
+        /* EASTER EGG NOTIFICATIONS */
+        .easter-egg-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            z-index: 2000;
+            max-width: 90%;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            animation: easterEggPop 0.8s ease-out;
+        }
+
+        @keyframes easterEggPop {
+            0% { transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.1) rotate(5deg); }
+            100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        /* SECRET MODE INDICATORS */
+        .mode-indicators {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            gap: 10px;
+            z-index: 1500;
+        }
+
+        .mode-badge {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            animation: modeActivated 0.5s ease-out;
+        }
+
+        @keyframes modeActivated {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        /* Control Indicators */
         .control-indicators {
             margin: 20px 0;
             padding: 15px;
@@ -122,12 +183,6 @@
             border-radius: 8px;
             border-left: 3px solid #FF5722;
             animation: shake 0.6s ease-in-out;
-        }
-
-        .conflict-details {
-            font-size: 0.9rem;
-            opacity: 0.8;
-            margin-top: 5px;
         }
 
         .loading-section {
@@ -237,16 +292,6 @@
             box-shadow: 0 6px 20px rgba(29, 185, 84, 0.6);
         }
 
-        .volume-slider::-moz-range-thumb {
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #1DB954, #1ed760);
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
-        }
-
         .volume-labels {
             display: flex;
             justify-content: space-between;
@@ -299,6 +344,38 @@
 
         .btn.primary:hover:not(:disabled) {
             background: linear-gradient(45deg, #1ed760, #22ff64);
+        }
+
+        /* CUSTOM MESSAGE SECTION */
+        .custom-message-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border-left: 4px solid #4ecdc4;
+        }
+
+        .custom-message-input {
+            width: 100%;
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 16px;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+        }
+
+        .custom-message-input:focus {
+            outline: none;
+            border-color: #4ecdc4;
+            box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
+        }
+
+        .custom-message-input::placeholder {
+            color: rgba(255,255,255,0.6);
         }
 
         .emoji-section {
@@ -414,6 +491,17 @@
             background: #3498db;
         }
 
+        .notification.easter-egg {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            font-weight: bold;
+            animation: easterEggGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes easterEggGlow {
+            0%, 100% { box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+            50% { box-shadow: 0 12px 35px rgba(255, 107, 107, 0.6); }
+        }
+
         .hidden {
             display: none !important;
         }
@@ -492,6 +580,9 @@
     </style>
 </head>
 <body>
+    <!-- Mode Indicators -->
+    <div class="mode-indicators" id="mode-indicators"></div>
+
     <div class="notification" id="notification"></div>
 
     <div class="container">
@@ -525,7 +616,7 @@
 
         <!-- MAIN CONTROL -->
         <div class="card hidden" id="control-section">
-            <!-- NOWE: Control Indicators -->
+            <!-- Control Indicators -->
             <div class="control-indicators">
                 <div id="controller-info" class="controller-info inactive">
                     <span class="pulse-dot inactive" id="pulse-indicator"></span>
@@ -582,6 +673,22 @@
                 </button>
             </div>
 
+            <!-- NOWE: CUSTOM MESSAGE SECTION -->
+            <div class="custom-message-section">
+                <div class="emoji-title">💬 Wyślij Własną Wiadomość</div>
+                <div class="emoji-subtitle">
+                    ✨ napisz cokolwiek chcesz - może ukryte komendy? ✨
+                </div>
+                <input type="text" id="custom-message-input" class="custom-message-input" 
+                       placeholder="Napisz swoją wiadomość... 🎵" maxlength="200">
+                <button class="btn primary" onclick="sendCustomMessage()">
+                    📤 Wyślij Wiadomość
+                </button>
+                <p style="font-size: 0.8rem; opacity: 0.6; margin-top: 10px;">
+                    Wskazówka: spróbuj "meow mode", "poetry mode" lub "rainbow mode" 😉
+                </p>
+            </div>
+
             <div class="emoji-section">
                 <div class="emoji-title">💬 Wyślij Reakcję</div>
                 <div class="emoji-subtitle">
@@ -615,7 +722,12 @@
             neighborId: 'neighbor_' + Math.random().toString(36).substr(2, 9),
             isRateLimited: false,
             pendingVolumeChange: null,
-            currentController: null
+            currentController: null,
+            globalModes: {
+                catMode: false,
+                poetryMode: false,
+                rainbowMode: false
+            }
         };
 
         // Poetic messages for each emoji
@@ -680,6 +792,13 @@
             initializeControls();
             loadSessionData();
             connectWebSocket();
+            
+            // Add Enter key support for custom message
+            document.getElementById('custom-message-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendCustomMessage();
+                }
+            });
         });
 
         // Initialize volume controls
@@ -716,6 +835,18 @@
                 // Update controller info
                 if (data.currentController) {
                     updateControllerInfo(data.currentController);
+                }
+                
+                // Update global modes
+                if (data.globalModes) {
+                    appState.globalModes = data.globalModes;
+                    updateModeIndicators();
+                    updateBodyClasses();
+                }
+                
+                // Check for Easter Egg on load
+                if (data.easterEgg && data.easterEgg.detected) {
+                    showEasterEgg(data.easterEgg);
                 }
                 
                 // Show control section
@@ -772,7 +903,7 @@
             else volumeEl.style.color = '#FF5722';
         }
 
-        // NOWE: Update controller info
+        // Update controller info
         function updateControllerInfo(controllerId) {
             const controllerInfo = document.getElementById('controller-info');
             const pulseIndicator = document.getElementById('pulse-indicator');
@@ -808,7 +939,61 @@
             }
         }
 
-        // NOWE: Show pending change
+        // NOWE: Update mode indicators
+        function updateModeIndicators() {
+            const container = document.getElementById('mode-indicators');
+            container.innerHTML = '';
+            
+            if (appState.globalModes.catMode) {
+                const badge = document.createElement('div');
+                badge.className = 'mode-badge';
+                badge.textContent = '🐱 Cat Mode';
+                container.appendChild(badge);
+            }
+            
+            if (appState.globalModes.poetryMode) {
+                const badge = document.createElement('div');
+                badge.className = 'mode-badge';
+                badge.textContent = '📜 Poetry Mode';
+                container.appendChild(badge);
+            }
+            
+            if (appState.globalModes.rainbowMode) {
+                const badge = document.createElement('div');
+                badge.className = 'mode-badge';
+                badge.textContent = '🌈 Rainbow Mode';
+                container.appendChild(badge);
+            }
+        }
+
+        // NOWE: Update body classes for visual effects
+        function updateBodyClasses() {
+            document.body.classList.toggle('rainbow-mode', appState.globalModes.rainbowMode);
+        }
+
+        // NOWE: Show Easter Egg notification
+        function showEasterEgg(easterEgg) {
+            // Create special Easter Egg notification
+            const easterEggDiv = document.createElement('div');
+            easterEggDiv.className = 'easter-egg-notification';
+            easterEggDiv.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 15px;">🎭✨🎵</div>
+                <div style="margin-bottom: 10px;">EASTER EGG DETECTED!</div>
+                <div style="font-size: 1rem; opacity: 0.9;">${easterEgg.message}</div>
+            `;
+            
+            document.body.appendChild(easterEggDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                easterEggDiv.remove();
+            }, 5000);
+            
+            // Also show regular notification
+            showNotification(`🎭 ${easterEgg.message}`, 'easter-egg');
+        }
+
+        // Show pending change
         function showPendingChange(userId, volume, originalVolume, delay, isConflictResolution) {
             const pendingEl = document.getElementById('pending-change');
             const detailsEl = document.getElementById('pending-details');
@@ -849,7 +1034,7 @@
             appState.pendingVolumeChange = { timer, volume };
         }
 
-        // NOWE: Hide pending change
+        // Hide pending change
         function hidePendingChange() {
             document.getElementById('pending-change').classList.add('hidden');
             document.getElementById('volume-display').classList.remove('pending');
@@ -860,7 +1045,7 @@
             }
         }
 
-        // NOWE: Show conflict warning
+        // Show conflict warning
         function showConflictWarning(conflictingUsers, originalVolume, averagedVolume) {
             const warningEl = document.getElementById('conflict-warning');
             const detailsEl = document.getElementById('conflict-details');
@@ -878,7 +1063,7 @@
             }, 5000);
         }
 
-        // Control volume (ZAKTUALIZOWANE)
+        // Control volume
         async function controlVolume(volume) {
             if (appState.isRateLimited) {
                 showNotification('⏳ Poczekaj chwilę przed następną zmianą', 'warning');
@@ -914,7 +1099,12 @@
                 
                 if (data.success) {
                     updateStatusText(`🔊 Zmiana głośności na ${volume}% zaplanowana`);
-                    showNotification(`🔊 Zmiana na ${volume}% zostanie zastosowana za ${data.willApplyIn}ms`, 'info');
+                    showNotification(`🔊 Zmiana na ${volume}% zostanie zastosowana`, 'info');
+                    
+                    // Handle Easter Egg
+                    if (data.easterEgg && data.easterEgg.detected) {
+                        showEasterEgg(data.easterEgg);
+                    }
                 } else {
                     throw new Error(data.error || 'Failed to control volume');
                 }
@@ -929,6 +1119,65 @@
         function setVolume(volume) {
             updateVolumeDisplay(volume);
             controlVolume(volume);
+        }
+
+        // NOWE: Send custom message
+        async function sendCustomMessage() {
+            const input = document.getElementById('custom-message-input');
+            const message = input.value.trim();
+            
+            if (!message) {
+                showNotification('❌ Napisz jakąś wiadomość!', 'error');
+                return;
+            }
+            
+            if (message.length > 200) {
+                showNotification('❌ Wiadomość za długa (max 200 znaków)', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/control/${appState.linkId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        neighborId: appState.neighborId,
+                        action: 'custom_message',
+                        customMessage: message
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Check if it was a secret command
+                    if (data.secretActivated) {
+                        showNotification(`🎭 ${data.message}`, 'success');
+                        // Don't clear input for secret commands so user can see what they typed
+                    } else {
+                        updateStatusText(`📤 Wysłano: "${data.message || message}"`);
+                        showNotification('📤 Wiadomość wysłana!', 'success');
+                        input.value = ''; // Clear input only for regular messages
+                    }
+                    
+                    // Handle Easter Egg
+                    if (data.easterEgg && data.easterEgg.detected) {
+                        showEasterEgg(data.easterEgg);
+                    }
+                    
+                    // Handle applied modes
+                    if (data.appliedModes && data.appliedModes.length > 0) {
+                        showNotification(`✨ Zastosowano tryby: ${data.appliedModes.join(', ')}`, 'info');
+                    }
+                    
+                } else {
+                    throw new Error(data.error || 'Failed to send message');
+                }
+                
+            } catch (error) {
+                console.error('Send custom message error:', error);
+                showNotification('❌ Błąd wysyłania wiadomości', 'error');
+            }
         }
 
         // Send emoji with poetic message
@@ -951,11 +1200,16 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    updateStatusText(`${emoji} Wysłano: "${poeticMessage}"`);
+                    updateStatusText(`${emoji} Wysłano: "${data.message || poeticMessage}"`);
                     showNotification(`${emoji} Wiadomość wysłana!`, 'success');
                     
                     // Animate emoji button
                     animateButton(event.target);
+                    
+                    // Handle Easter Egg
+                    if (data.easterEgg && data.easterEgg.detected) {
+                        showEasterEgg(data.easterEgg);
+                    }
                 } else {
                     throw new Error(data.error || 'Failed to send message');
                 }
@@ -992,11 +1246,16 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    updateStatusText(`❤️ Podziękowanie: "${randomMessage}"`);
+                    updateStatusText(`❤️ Podziękowanie: "${data.message || randomMessage}"`);
                     showNotification('❤️ Poetyckie dzięki wysłane!', 'success');
                     
                     // Animate button
                     animateButton(event.target);
+                    
+                    // Handle Easter Egg
+                    if (data.easterEgg && data.easterEgg.detected) {
+                        showEasterEgg(data.easterEgg);
+                    }
                 } else {
                     throw new Error(data.error || 'Failed to send thank you');
                 }
@@ -1047,6 +1306,22 @@
                         if (data.currentController !== appState.currentController) {
                             updateControllerInfo(data.currentController);
                         }
+                        
+                        // Update global modes if changed
+                        if (data.globalModes && JSON.stringify(data.globalModes) !== JSON.stringify(appState.globalModes)) {
+                            appState.globalModes = data.globalModes;
+                            updateModeIndicators();
+                            updateBodyClasses();
+                        }
+                        
+                        // Check for Easter Egg
+                        if (data.easterEgg && data.easterEgg.detected) {
+                            // Only show if we haven't shown this one recently
+                            if (!appState.lastEasterEgg || appState.lastEasterEgg.message !== data.easterEgg.message) {
+                                showEasterEgg(data.easterEgg);
+                                appState.lastEasterEgg = data.easterEgg;
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error('Status update error:', error);
@@ -1054,7 +1329,7 @@
             }, 10000); // Update every 10 seconds
         }
 
-        // Connect WebSocket for real-time updates (ZAKTUALIZOWANE)
+        // Connect WebSocket for real-time updates (FIXED)
         function connectWebSocket() {
             appState.socket = io();
             
@@ -1112,6 +1387,33 @@
                             updateVolumeDisplay(data.session.volume);
                         }
                         break;
+                        
+                    case 'session_joined':
+                        // Handle session join response
+                        if (data.currentController) {
+                            updateControllerInfo(data.currentController);
+                        }
+                        if (data.globalModes) {
+                            appState.globalModes = data.globalModes;
+                            updateModeIndicators();
+                            updateBodyClasses();
+                        }
+                        if (data.easterEgg && data.easterEgg.detected) {
+                            showEasterEgg(data.easterEgg);
+                        }
+                        break;
+                }
+                
+                // Handle global updates
+                if (data.globalModes && JSON.stringify(data.globalModes) !== JSON.stringify(appState.globalModes)) {
+                    appState.globalModes = data.globalModes;
+                    updateModeIndicators();
+                    updateBodyClasses();
+                }
+                
+                // Handle Easter Eggs from WebSocket
+                if (data.easterEgg && data.easterEgg.detected) {
+                    showEasterEgg(data.easterEgg);
                 }
             });
         }
@@ -1125,12 +1427,15 @@
             
             setTimeout(() => {
                 notification.classList.remove('show');
-            }, 3000);
+            }, type === 'easter-egg' ? 5000 : 3000);
         }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (appState.isRateLimited) return; // Ignore if rate limited
+            
+            // Don't trigger shortcuts when typing in input
+            if (e.target.tagName === 'INPUT') return;
             
             switch(e.key) {
                 case 'm':
@@ -1150,6 +1455,12 @@
                     e.preventDefault();
                     const newVolumeDown = Math.max(0, appState.currentVolume - 5);
                     setVolume(newVolumeDown);
+                    break;
+                case 'Enter':
+                    // Focus on custom message input if not already focused
+                    if (e.target.id !== 'custom-message-input') {
+                        document.getElementById('custom-message-input').focus();
+                    }
                     break;
             }
         });
