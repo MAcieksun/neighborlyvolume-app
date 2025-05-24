@@ -18,12 +18,16 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// STATS TRACKING - DODAJ TO
+// ADVANCED STATS TRACKING
 let stats = {
     totalVisits: 0,
-    uniqueSessions: 0,
+    uniqueIPs: new Set(),
+    userSessions: new Set(),
     volumeChanges: 0,
-    startTime: new Date()
+    startTime: new Date(),
+    authAttempts: 0,
+    linksGenerated: 0,
+    neighborVisits: 0
 };
 
 // ===== KONFIGURACJA =====
@@ -46,7 +50,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // LOGGING MIDDLEWARE - DODAJ TO
 app.use((req, res, next) => {
     stats.totalVisits++;
-    console.log(`📊 ${new Date().toLocaleTimeString()} - ${req.method} ${req.path} - Total: ${stats.totalVisits}`);
+    
+    // Track unique IPs
+    const userIP = req.ip || req.connection.remoteAddress || 'unknown';
+    stats.uniqueIPs.add(userIP);
+    
+    // Track different types of visits
+    if (req.path === '/auth/login') stats.authAttempts++;
+    if (req.path.startsWith('/control/')) stats.neighborVisits++;
+    
+    console.log(`📊 ${new Date().toLocaleTimeString()} - ${req.method} ${req.path} - Unique IPs: ${stats.uniqueIPs.size}`);
     next();
 });
 
@@ -357,7 +370,7 @@ app.post('/api/create-link', async (req, res) => {
         await saveSessions();
         
         console.log('✅ SESSION CREATED WITH 7-DAY EXPIRY:', { linkId, userId, expiresAt: sessionData.expiresAt });
-        
+        stats.linksGenerated++; // DODAJ TO
         res.json({ 
             success: true, 
             linkId, 
@@ -679,9 +692,15 @@ app.get('/control/:linkId', (req, res) => {
 // STATS ENDPOINT - DODAJ TO
 app.get('/api/stats', (req, res) => {
     res.json({
-        ...stats,
+        totalVisits: stats.totalVisits,
+        uniqueUsers: stats.uniqueIPs.size,
+        authAttempts: stats.authAttempts,
+        linksGenerated: stats.linksGenerated,
+        neighborVisits: stats.neighborVisits,
+        volumeChanges: stats.volumeChanges,
         activeSessions: activeSessions.size,
-        uptime: Math.floor((Date.now() - stats.startTime) / 1000 / 60) + ' minutes'
+        uptime: Math.floor((Date.now() - stats.startTime) / 1000 / 60) + ' minutes',
+        conversionRate: stats.uniqueIPs.size > 0 ? (stats.authAttempts / stats.uniqueIPs.size * 100).toFixed(1) + '%' : '0%'
     });
 });
 app.get('/', (req, res) => {
