@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeighborlyVolume - Kontrola Głośności</title>
+    <title>NeighborlyVolume - Volume Control</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -361,13 +361,6 @@
             display: none !important;
         }
 
-        .quote-attribution {
-            font-size: 0.8rem;
-            opacity: 0.6;
-            margin-top: 5px;
-            font-style: italic;
-        }
-
         @keyframes fadeInDown {
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -457,7 +450,7 @@
                     <strong data-i18n="now-playing">Teraz gra u sąsiada:</strong>
                 </div>
                 <img id="track-image" class="track-image hidden" src="" alt="Album cover">
-                <div class="track-name" id="track-name">Ładowanie...</div>
+                <div class="track-name" id="track-name">Loading...</div>
                 <div class="track-artist" id="track-artist"></div>
                 <div style="opacity: 0.6; font-size: 0.9rem;" id="track-album"></div>
             </div>
@@ -491,15 +484,15 @@
             <div class="emoji-section">
                 <div class="emoji-title" data-i18n="send-reaction">💬 Wyślij Reakcję</div>
                 <div class="emoji-subtitle" data-i18n="poetic-messages">
-                    ✨ poetyckie wiadomości dla sąsiada ✨
+                    ✨ poetyckie cytaty dla sąsiada ✨
                 </div>
                 <div class="emoji-picker">
-                    <button class="emoji-btn" onclick="sendEmoji('👍', 'Dzięki!')" title="Dzięki!">👍</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🤫', 'Za głośno')" title="Za głośno">🤫</button>
-                    <button class="emoji-btn" onclick="sendEmoji('❤️', 'Lubię!')" title="Lubię!">❤️</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🎵', 'Super!')" title="Super muzyka!">🎵</button>
-                    <button class="emoji-btn" onclick="sendEmoji('😴', 'Śpię')" title="Próbuję spać">😴</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🔥', 'Fire!')" title="Zajebiste!">🔥</button>
+                    <button class="emoji-btn" onclick="sendEmoji('👍', 'Thanks!')" title="Thanks!">👍</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🤫', 'Too loud')" title="Too loud">🤫</button>
+                    <button class="emoji-btn" onclick="sendEmoji('❤️', 'Love it!')" title="Love it!">❤️</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🎵', 'Great music!')" title="Great music!">🎵</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😴', 'Sleeping')" title="Trying to sleep">😴</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🔥', 'Fire!')" title="Awesome!">🔥</button>
                 </div>
             </div>
 
@@ -540,7 +533,13 @@
                 "btn-thanks": "❤️ Dzięki!",
                 "send-reaction": "💬 Wyślij Reakcję",
                 "poetic-messages": "✨ poetyckie cytaty dla sąsiada ✨",
-                "connected-status": "Połączono z systemem sąsiada • Wszystko działa prawidłowo"
+                "connected-status": "Połączono z systemem sąsiada • Wszystko działa prawidłowo",
+                "connected-neighbor": "🎵 Połączono z muzyką sąsiada!",
+                "message-sent": "Wiadomość wysłana!",
+                "thank-you-sent": "❤️ Poetyckie dzięki wysłane!",
+                "volume-set": "Ustawiono",
+                "volume-changed": "🔊 Głośność zmieniona na",
+                "no-active-music": "Brak aktywnej muzyki"
             },
             en: {
                 subtitle: "Neighborly Volume Control",
@@ -558,7 +557,13 @@
                 "btn-thanks": "❤️ Thanks!",
                 "send-reaction": "💬 Send Reaction",
                 "poetic-messages": "✨ artistic quotes for your neighbor ✨",
-                "connected-status": "Connected to neighbor's system • Everything works perfectly"
+                "connected-status": "Connected to neighbor's system • Everything works perfectly",
+                "connected-neighbor": "🎵 Connected to neighbor's music!",
+                "message-sent": "Message sent!",
+                "thank-you-sent": "❤️ Poetic thanks sent!",
+                "volume-set": "Set to",
+                "volume-changed": "🔊 Volume changed to",
+                "no-active-music": "No active music"
             }
         };
 
@@ -749,12 +754,7 @@
                 document.getElementById('loading-section').classList.add('hidden');
                 document.getElementById('control-section').classList.remove('hidden');
                 
-                showNotification(
-                    appState.currentLanguage === 'pl' 
-                        ? '🎵 Połączono z muzyką sąsiada!' 
-                        : '🎵 Connected to neighbor\'s music!', 
-                    'success'
-                );
+                showNotification(translations[appState.currentLanguage]['connected-neighbor'], 'success');
                 
                 // Start periodic updates
                 startStatusUpdates();
@@ -784,8 +784,7 @@
                     img.classList.remove('hidden');
                 }
             } else {
-                const noMusicText = appState.currentLanguage === 'pl' ? 'Brak aktywnej muzyki' : 'No active music';
-                document.getElementById('track-name').textContent = noMusicText;
+                document.getElementById('track-name').textContent = translations[appState.currentLanguage]['no-active-music'];
                 document.getElementById('track-artist').textContent = '';
                 document.getElementById('track-album').textContent = '';
             }
@@ -836,14 +835,10 @@
                 console.log('✅ VOLUME RESPONSE DATA:', data);
                 
                 if (data.success) {
-                    const message = appState.currentLanguage === 'pl' 
-                        ? `🔊 Głośność zmieniona na ${volume}%`
-                        : `🔊 Volume changed to ${volume}%`;
+                    const message = `${translations[appState.currentLanguage]['volume-changed']} ${volume}%`;
                     updateStatusText(message);
                     
-                    const notification = appState.currentLanguage === 'pl'
-                        ? `🔊 Ustawiono ${volume}%`
-                        : `🔊 Set to ${volume}%`;
+                    const notification = `🔊 ${translations[appState.currentLanguage]['volume-set']} ${volume}%`;
                     showNotification(notification, 'success');
                 } else {
                     throw new Error(data.error || 'Failed to control volume');
@@ -851,10 +846,7 @@
                 
             } catch (error) {
                 console.error('❌ VOLUME CONTROL ERROR:', error);
-                const errorMsg = appState.currentLanguage === 'pl'
-                    ? `❌ Błąd: ${error.message}`
-                    : `❌ Error: ${error.message}`;
-                showNotification(errorMsg, 'error');
+                showNotification(`❌ ${error.message}`, 'error');
             }
         }
 
@@ -907,9 +899,7 @@
                     const statusText = `${emoji} ${appState.currentLanguage === 'pl' ? 'Wysłano' : 'Sent'}: "${poeticMessage}"`;
                     updateStatusText(statusText);
                     
-                    const notificationText = appState.currentLanguage === 'pl' 
-                        ? `${emoji} Wiadomość wysłana!`
-                        : `${emoji} Message sent!`;
+                    const notificationText = `${emoji} ${translations[appState.currentLanguage]['message-sent']}`;
                     showNotification(notificationText, 'success');
                     
                     // Find and animate the clicked button
@@ -923,10 +913,7 @@
                 
             } catch (error) {
                 console.error('❌ SEND EMOJI ERROR:', error);
-                const errorMsg = appState.currentLanguage === 'pl'
-                    ? `❌ Błąd: ${error.message}`
-                    : `❌ Error: ${error.message}`;
-                showNotification(errorMsg, 'error');
+                showNotification(`❌ ${error.message}`, 'error');
             }
         }
 
@@ -972,10 +959,7 @@
                     const statusText = `❤️ ${appState.currentLanguage === 'pl' ? 'Podziękowanie' : 'Thank you'}: "${randomMessage}"`;
                     updateStatusText(statusText);
                     
-                    const notificationText = appState.currentLanguage === 'pl'
-                        ? '❤️ Poetyckie dzięki wysłane!'
-                        : '❤️ Poetic thanks sent!';
-                    showNotification(notificationText, 'success');
+                    showNotification(translations[appState.currentLanguage]['thank-you-sent'], 'success');
                     
                     // Find and animate the thank you button
                     const thankYouButton = document.querySelector('.btn.primary');
@@ -988,10 +972,7 @@
                 
             } catch (error) {
                 console.error('❌ SEND THANK YOU ERROR:', error);
-                const errorMsg = appState.currentLanguage === 'pl'
-                    ? `❌ Błąd: ${error.message}`
-                    : `❌ Error: ${error.message}`;
-                showNotification(errorMsg, 'error');
+                showNotification(`❌ ${error.message}`, 'error');
             }
         }
 
@@ -1012,9 +993,7 @@
                 `<span class="connection-indicator"></span>${message}`;
             
             setTimeout(() => {
-                const defaultText = appState.currentLanguage === 'pl'
-                    ? 'Połączono z systemem sąsiada • Wszystko działa prawidłowo'
-                    : 'Connected to neighbor\'s system • Everything works perfectly';
+                const defaultText = translations[appState.currentLanguage]['connected-status'];
                 document.getElementById('status-text').innerHTML = 
                     `<span class="connection-indicator"></span>${defaultText}`;
             }, 5000);
