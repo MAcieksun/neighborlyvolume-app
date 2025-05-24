@@ -18,6 +18,14 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
+// STATS TRACKING - DODAJ TO
+let stats = {
+    totalVisits: 0,
+    uniqueSessions: 0,
+    volumeChanges: 0,
+    startTime: new Date()
+};
+
 // ===== KONFIGURACJA =====
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || 'TWÓJ_CLIENT_ID_TUTAJ';
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || 'TWÓJ_CLIENT_SECRET_TUTAJ';
