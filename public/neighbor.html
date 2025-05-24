@@ -45,6 +45,37 @@
             text-align: center;
             margin-bottom: 30px;
             animation: fadeInDown 1s ease-out;
+            position: relative;
+        }
+
+        .language-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            gap: 5px;
+            z-index: 100;
+        }
+
+        .lang-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .lang-btn.active {
+            background: #1DB954;
+            border-color: #1DB954;
+        }
+
+        .lang-btn:hover {
+            background: rgba(255,255,255,0.2);
         }
 
         .logo {
@@ -576,6 +607,12 @@
             .quick-actions {
                 grid-template-columns: 1fr;
             }
+
+            .language-toggle {
+                position: relative;
+                margin-bottom: 15px;
+                justify-content: center;
+            }
         }
     </style>
 </head>
@@ -587,16 +624,20 @@
 
     <div class="container">
         <div class="header">
+            <div class="language-toggle">
+                <button class="lang-btn active" onclick="setLanguage('pl')" id="lang-pl">PL</button>
+                <button class="lang-btn" onclick="setLanguage('en')" id="lang-en">EN</button>
+            </div>
             <div class="logo">🎵 NeighborlyVolume</div>
-            <div class="subtitle">Sąsiedzka Kontrola Głośności</div>
+            <div class="subtitle" data-i18n="subtitle">Sąsiedzka Kontrola Głośności</div>
         </div>
 
         <!-- LOADING STATE -->
         <div class="card" id="loading-section">
             <div class="loading-section">
                 <div class="spinner"></div>
-                <h3>Łączenie z systemem...</h3>
-                <p style="opacity: 0.7; margin-top: 10px;">
+                <h3 data-i18n="connecting">Łączenie z systemem...</h3>
+                <p style="opacity: 0.7; margin-top: 10px;" data-i18n="checking-connection">
                     Sprawdzamy połączenie z muzyką sąsiada
                 </p>
             </div>
@@ -606,8 +647,8 @@
         <div class="card hidden" id="error-section">
             <div class="error-section">
                 <div class="error-icon">❌</div>
-                <h3>Sesja nie została znaleziona</h3>
-                <p style="opacity: 0.7; margin-top: 15px;">
+                <h3 data-i18n="session-not-found">Sesja nie została znaleziona</h3>
+                <p style="opacity: 0.7; margin-top: 15px;" data-i18n="invalid-link">
                     Link może być nieprawidłowy lub wygasły.<br>
                     Poproś sąsiada o nowy link.
                 </p>
@@ -620,17 +661,17 @@
             <div class="control-indicators">
                 <div id="controller-info" class="controller-info inactive">
                     <span class="pulse-dot inactive" id="pulse-indicator"></span>
-                    <span id="controller-text">Nikt obecnie nie kontroluje głośności</span>
+                    <span id="controller-text" data-i18n="no-controller">Nikt obecnie nie kontroluje głośności</span>
                 </div>
                 
                 <div id="pending-change" class="pending-change hidden">
-                    <strong>⏳ Oczekująca zmiana:</strong>
+                    <strong data-i18n="pending-change">⏳ Oczekująca zmiana:</strong>
                     <span id="pending-details">Głośność zostanie zmieniona na 50% za 3 sekundy...</span>
                 </div>
                 
                 <div id="conflict-warning" class="conflict-warning hidden">
-                    <strong>⚠️ Wykryto konflikt głośności!</strong>
-                    <div class="conflict-details" id="conflict-details">
+                    <strong data-i18n="conflict-detected">⚠️ Wykryto konflikt głośności!</strong>
+                    <div class="conflict-details" id="conflict-details" data-i18n="conflict-details">
                         Wiele osób próbuje kontrolować głośność - system uśrednia wartości
                     </div>
                 </div>
@@ -639,7 +680,7 @@
             <div class="current-track">
                 <div class="connection-indicator"></div>
                 <div style="margin-bottom: 15px;">
-                    <strong>Teraz gra u sąsiada:</strong>
+                    <strong data-i18n="now-playing">Teraz gra u sąsiada:</strong>
                 </div>
                 <img id="track-image" class="track-image hidden" src="" alt="Album cover">
                 <div class="track-name" id="track-name">Ładowanie...</div>
@@ -648,66 +689,66 @@
             </div>
 
             <div class="volume-control">
-                <h3 style="margin-bottom: 20px;">🎛️ Kontrola Głośności</h3>
+                <h3 style="margin-bottom: 20px;" data-i18n="volume-control">🎛️ Kontrola Głośności</h3>
                 <div class="volume-display" id="volume-display">50%</div>
                 <input type="range" min="0" max="100" value="50" 
                        class="volume-slider" id="volume-slider">
                 <div class="volume-labels">
-                    <span>🔇 Cisza</span>
-                    <span>🔊 Głośno</span>
+                    <span data-i18n="silent">🔇 Cisza</span>
+                    <span data-i18n="loud">🔊 Głośno</span>
                 </div>
             </div>
 
             <div class="quick-actions">
                 <button class="btn" onclick="setVolume(0)">
-                    🤫 Wycisz
+                    <span data-i18n="mute">🤫 Wycisz</span>
                 </button>
                 <button class="btn" onclick="setVolume(25)">
-                    🔉 Cicho
+                    <span data-i18n="quiet">🔉 Cicho</span>
                 </button>
                 <button class="btn" onclick="setVolume(50)">
-                    🎵 Średnio
+                    <span data-i18n="medium">🎵 Średnio</span>
                 </button>
                 <button class="btn primary" onclick="sendThankYou()">
-                    ❤️ Dzięki!
+                    <span data-i18n="thanks">❤️ Dzięki!</span>
                 </button>
             </div>
 
-            <!-- NOWE: CUSTOM MESSAGE SECTION -->
+            <!-- CUSTOM MESSAGE SECTION -->
             <div class="custom-message-section">
-                <div class="emoji-title">💬 Wyślij Własną Wiadomość</div>
-                <div class="emoji-subtitle">
+                <div class="emoji-title" data-i18n="send-custom-message">💬 Wyślij Własną Wiadomość</div>
+                <div class="emoji-subtitle" data-i18n="custom-hint">
                     ✨ napisz cokolwiek chcesz - może ukryte komendy? ✨
                 </div>
                 <input type="text" id="custom-message-input" class="custom-message-input" 
-                       placeholder="Napisz swoją wiadomość... 🎵" maxlength="200">
+                       data-i18n-placeholder="message-placeholder" placeholder="Napisz swoją wiadomość... 🎵" maxlength="200">
                 <button class="btn primary" onclick="sendCustomMessage()">
-                    📤 Wyślij Wiadomość
+                    <span data-i18n="send-message">📤 Wyślij Wiadomość</span>
                 </button>
-                <p style="font-size: 0.8rem; opacity: 0.6; margin-top: 10px;">
+                <p style="font-size: 0.8rem; opacity: 0.6; margin-top: 10px;" data-i18n="secret-commands-hint">
                     Wskazówka: spróbuj "meow mode", "poetry mode" lub "rainbow mode" 😉
                 </p>
             </div>
 
             <div class="emoji-section">
-                <div class="emoji-title">💬 Wyślij Reakcję</div>
-                <div class="emoji-subtitle">
+                <div class="emoji-title" data-i18n="send-reaction">💬 Wyślij Reakcję</div>
+                <div class="emoji-subtitle" data-i18n="poetic-messages">
                     ✨ poetyckie wiadomości dla sąsiada ✨
                 </div>
                 <div class="emoji-picker">
-                    <button class="emoji-btn" onclick="sendEmoji('👍', 'Dzięki!')" title="Dzięki!">👍</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🤫', 'Za głośno')" title="Za głośno">🤫</button>
-                    <button class="emoji-btn" onclick="sendEmoji('❤️', 'Lubię!')" title="Lubię!">❤️</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🎵', 'Super!')" title="Super muzyka!">🎵</button>
-                    <button class="emoji-btn" onclick="sendEmoji('😴', 'Śpię')" title="Próbuję spać">😴</button>
-                    <button class="emoji-btn" onclick="sendEmoji('🔥', 'Fire!')" title="Zajebiste!">🔥</button>
+                    <button class="emoji-btn" onclick="sendEmoji('👍', 'Dzięki!')" data-i18n-title="thanks-emoji" title="Dzięki!">👍</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🤫', 'Za głośno')" data-i18n-title="too-loud" title="Za głośno">🤫</button>
+                    <button class="emoji-btn" onclick="sendEmoji('❤️', 'Lubię!')" data-i18n-title="love-it" title="Lubię!">❤️</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🎵', 'Super!')" data-i18n-title="great-music" title="Super muzyka!">🎵</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😴', 'Śpię')" data-i18n-title="sleeping" title="Próbuję spać">😴</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🔥', 'Fire!')" data-i18n-title="fire" title="Zajebiste!">🔥</button>
                 </div>
             </div>
 
             <div class="status-section">
                 <div id="status-text">
                     <span class="connection-indicator"></span>
-                    Połączono z systemem sąsiada • Wszystko działa prawidłowo
+                    <span data-i18n="connected-status">Połączono z systemem sąsiada • Wszystko działa prawidłowo</span>
                 </div>
             </div>
         </div>
@@ -723,6 +764,7 @@
             isRateLimited: false,
             pendingVolumeChange: null,
             currentController: null,
+            currentLanguage: 'pl',
             globalModes: {
                 catMode: false,
                 poetryMode: false,
@@ -730,55 +772,248 @@
             }
         };
 
-        // Poetic messages for each emoji
+        // Translations
+        const translations = {
+            pl: {
+                "subtitle": "Sąsiedzka Kontrola Głośności",
+                "connecting": "Łączenie z systemem...",
+                "checking-connection": "Sprawdzamy połączenie z muzyką sąsiada",
+                "session-not-found": "Sesja nie została znaleziona",
+                "invalid-link": "Link może być nieprawidłowy lub wygasły.<br>Poproś sąsiada o nowy link.",
+                "no-controller": "Nikt obecnie nie kontroluje głośności",
+                "pending-change": "⏳ Oczekująca zmiana:",
+                "conflict-detected": "⚠️ Wykryto konflikt głośności!",
+                "conflict-details": "Wiele osób próbuje kontrolować głośność - system uśrednia wartości",
+                "now-playing": "Teraz gra u sąsiada:",
+                "volume-control": "🎛️ Kontrola Głośności",
+                "silent": "🔇 Cisza",
+                "loud": "🔊 Głośno",
+                "mute": "🤫 Wycisz",
+                "quiet": "🔉 Cicho",
+                "medium": "🎵 Średnio",
+                "thanks": "❤️ Dzięki!",
+                "send-custom-message": "💬 Wyślij Własną Wiadomość",
+                "custom-hint": "✨ napisz cokolwiek chcesz - może ukryte komendy? ✨",
+                "message-placeholder": "Napisz swoją wiadomość... 🎵",
+                "send-message": "📤 Wyślij Wiadomość",
+                "secret-commands-hint": "Wskazówka: spróbuj \"meow mode\", \"poetry mode\" lub \"rainbow mode\" 😉",
+                "send-reaction": "💬 Wyślij Reakcję",
+                "poetic-messages": "✨ poetyckie wiadomości dla sąsiada ✨",
+                "thanks-emoji": "Dzięki!",
+                "too-loud": "Za głośno",
+                "love-it": "Lubię!",
+                "great-music": "Super muzyka!",
+                "sleeping": "Próbuję spać",
+                "fire": "Zajebiste!",
+                "connected-status": "Połączono z systemem sąsiada • Wszystko działa prawidłowo",
+                "connected-neighbor": "🎵 Połączono z muzyką sąsiada!",
+                "volume-applied": "✅ Głośność zmieniona na",
+                "volume-scheduled": "🔊 Zmiana na",
+                "zostanie-zastosowana": "zostanie zastosowana",
+                "message-sent": "📤 Wiadomość wysłana!",
+                "secret-activated": "🎭",
+                "waiting-for-changes": "⏳ Poczekaj chwilę przed następną zmianą",
+                "volume-control-error": "❌ Błąd kontroli głośności",
+                "message-empty": "❌ Napisz jakąś wiadomość!",
+                "message-too-long": "❌ Wiadomość za długa (max 200 znaków)",
+                "message-error": "❌ Błąd wysyłania wiadomości",
+                "you-control": "Ty",
+                "other-neighbor": "Inny sąsiad",
+                "controls-volume": "obecnie kontroluje głośność"
+            },
+            en: {
+                "subtitle": "Neighbor Volume Control",
+                "connecting": "Connecting to system...",
+                "checking-connection": "Checking connection to neighbor's music",
+                "session-not-found": "Session not found",
+                "invalid-link": "Link may be invalid or expired.<br>Ask your neighbor for a new link.",
+                "no-controller": "No one is currently controlling volume",
+                "pending-change": "⏳ Pending change:",
+                "conflict-detected": "⚠️ Volume conflict detected!",
+                "conflict-details": "Multiple people are trying to control volume - system is averaging values",
+                "now-playing": "Now playing at neighbor's:",
+                "volume-control": "🎛️ Volume Control",
+                "silent": "🔇 Silent",
+                "loud": "🔊 Loud",
+                "mute": "🤫 Mute",
+                "quiet": "🔉 Quiet",
+                "medium": "🎵 Medium",
+                "thanks": "❤️ Thanks!",
+                "send-custom-message": "💬 Send Custom Message",
+                "custom-hint": "✨ write anything you want - maybe hidden commands? ✨",
+                "message-placeholder": "Write your message... 🎵",
+                "send-message": "📤 Send Message",
+                "secret-commands-hint": "Hint: try \"meow mode\", \"poetry mode\" or \"rainbow mode\" 😉",
+                "send-reaction": "💬 Send Reaction",
+                "poetic-messages": "✨ poetic messages for your neighbor ✨",
+                "thanks-emoji": "Thanks!",
+                "too-loud": "Too loud",
+                "love-it": "Love it!",
+                "great-music": "Great music!",
+                "sleeping": "Trying to sleep",
+                "fire": "Awesome!",
+                "connected-status": "Connected to neighbor's system • Everything working fine",
+                "connected-neighbor": "🎵 Connected to neighbor's music!",
+                "volume-applied": "✅ Volume changed to",
+                "volume-scheduled": "🔊 Change to",
+                "zostanie-zastosowana": "will be applied",
+                "message-sent": "📤 Message sent!",
+                "secret-activated": "🎭",
+                "waiting-for-changes": "⏳ Wait a moment before next change",
+                "volume-control-error": "❌ Volume control error",
+                "message-empty": "❌ Write some message!",
+                "message-too-long": "❌ Message too long (max 200 characters)",
+                "message-error": "❌ Message sending error",
+                "you-control": "You",
+                "other-neighbor": "Other neighbor",
+                "controls-volume": "is currently controlling volume"
+            }
+        };
+
+        // Set language
+        function setLanguage(lang) {
+            appState.currentLanguage = lang;
+            localStorage.setItem('neighborly_neighbor_language', lang);
+            
+            // Update UI
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`lang-${lang}`).classList.add('active');
+            
+            // Update all translatable elements
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    element.innerHTML = translations[lang][key];
+                }
+            });
+            
+            // Update placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (translations[lang][key]) {
+                    element.placeholder = translations[lang][key];
+                }
+            });
+            
+            // Update titles
+            document.querySelectorAll('[data-i18n-title]').forEach(element => {
+                const key = element.getAttribute('data-i18n-title');
+                if (translations[lang][key]) {
+                    element.title = translations[lang][key];
+                }
+            });
+            
+            const langMessage = lang === 'pl' ? '🇵🇱 Język zmieniony na polski' : '🇺🇸 Language changed to English';
+            showNotification(langMessage, 'success');
+        }
+
+        // Poetic messages for each emoji (now bilingual)
         const poeticMessages = {
-            '👍': [
-                "jak morze spokojne, gdy muzyka cichnie ☕",
-                "słodka cisza w serca rytmie 🌙",
-                "dzięki za ten miły gest, jak ranek łagodny ☀️",
-                "harmonia mieszka między nami 🕊️",
-                "twoja dobroć jak ciepła herbatka 🍃"
-            ],
-            '🤫': [
-                "cisza jest złotem, a ty anioł dobrego sąsiedztwa 👼",
-                "jak szept wiatru przez okno - dziękuję 🌿",
-                "nocny spokój wraca do nas ✨",
-                "w ciszy odnajduję serce 💙",
-                "cichość jak delikatna poezja 📖"
-            ],
-            '❤️': [
-                "serce tańczy do melodii dobroci 💃",
-                "miłość mieszka w małych gestach ☕",
-                "jak słodka kawka o poranku - ciepło 🌅",
-                "muzyka łączy, a ty łączysz nas jeszcze bardziej 🎵",
-                "love is in the air, and in the volume control 💕"
-            ],
-            '🎵': [
-                "melodie płyną jak rzeka, ty ich kapitanem 🚢",
-                "muzyka jest językiem duszy, kontrola - poezją 🎭",
-                "w rytmie serca i bitów - dziękuję 💗",
-                "harmonie przeplatają się z harmonią sąsiedzką 🎼",
-                "każda nuta ma teraz swoje miejsce 🌺"
-            ],
-            '😴': [
-                "sen przychodzi jak łagodna fala 🌊",
-                "w objęciach ciszy znajdę sny 🌙",
-                "morpheus czeka, a ty mu pomagasz ✨",
-                "noc będzie słodka jak poezja 📜",
-                "spokój nocny wraca do domu 🏠"
-            ],
-            '🔥': [
-                "ta muzyka jak ogień w sercu, ale teraz w sam raz 🔥",
-                "energia kontrolowana to poezja w ruchu 💫",
-                "fire vibes z mądrością - idealne połączenie ⚡",
-                "płomień artysty, serce sąsiada 🎨",
-                "jak gwiazda - świeci, ale nie oślepia ⭐"
-            ]
+            '👍': {
+                pl: [
+                    "jak morze spokojne, gdy muzyka cichnie ☕",
+                    "słodka cisza w serca rytmie 🌙",
+                    "dzięki za ten miły gest, jak ranek łagodny ☀️",
+                    "harmonia mieszka między nami 🕊️",
+                    "twoja dobroć jak ciepła herbatka 🍃"
+                ],
+                en: [
+                    "like a calm sea when music softens ☕",
+                    "sweet silence in heart's rhythm 🌙",
+                    "thanks for this kind gesture, like gentle morning ☀️",
+                    "harmony lives between us 🕊️",
+                    "your kindness like warm tea 🍃"
+                ]
+            },
+            '🤫': {
+                pl: [
+                    "cisza jest złotem, a ty anioł dobrego sąsiedztwa 👼",
+                    "jak szept wiatru przez okno - dziękuję 🌿",
+                    "nocny spokój wraca do nas ✨",
+                    "w ciszy odnajduję serce 💙",
+                    "cichość jak delikatna poezja 📖"
+                ],
+                en: [
+                    "silence is golden, and you're an angel of good neighborliness 👼",
+                    "like wind's whisper through window - thank you 🌿",
+                    "night's peace returns to us ✨",
+                    "in silence I find my heart 💙",
+                    "quietness like gentle poetry 📖"
+                ]
+            },
+            '❤️': {
+                pl: [
+                    "serce tańczy do melodii dobroci 💃",
+                    "miłość mieszka w małych gestach ☕",
+                    "jak słodka kawka o poranku - ciepło 🌅",
+                    "muzyka łączy, a ty łączysz nas jeszcze bardziej 🎵",
+                    "love is in the air, and in the volume control 💕"
+                ],
+                en: [
+                    "heart dances to melody of kindness 💃",
+                    "love lives in small gestures ☕",
+                    "like sweet coffee in the morning - warmth 🌅",
+                    "music connects, and you connect us even more 🎵",
+                    "love is in the air, and in the volume control 💕"
+                ]
+            },
+            '🎵': {
+                pl: [
+                    "melodie płyną jak rzeka, ty ich kapitanem 🚢",
+                    "muzyka jest językiem duszy, kontrola - poezją 🎭",
+                    "w rytmie serca i bitów - dziękuję 💗",
+                    "harmonie przeplatają się z harmonią sąsiedzką 🎼",
+                    "każda nuta ma teraz swoje miejsce 🌺"
+                ],
+                en: [
+                    "melodies flow like a river, you're their captain 🚢",
+                    "music is soul's language, control is poetry 🎭",
+                    "in rhythm of heart and beats - thank you 💗",
+                    "harmonies interweave with neighborly harmony 🎼",
+                    "every note now has its place 🌺"
+                ]
+            },
+            '😴': {
+                pl: [
+                    "sen przychodzi jak łagodna fala 🌊",
+                    "w objęciach ciszy znajdę sny 🌙",
+                    "morpheus czeka, a ty mu pomagasz ✨",
+                    "noc będzie słodka jak poezja 📜",
+                    "spokój nocny wraca do domu 🏠"
+                ],
+                en: [
+                    "sleep comes like gentle wave 🌊",
+                    "in silence's embrace I'll find dreams 🌙",
+                    "morpheus waits, and you help him ✨",
+                    "night will be sweet like poetry 📜",
+                    "night's peace returns home 🏠"
+                ]
+            },
+            '🔥': {
+                pl: [
+                    "ta muzyka jak ogień w sercu, ale teraz w sam raz 🔥",
+                    "energia kontrolowana to poezja w ruchu 💫",
+                    "fire vibes z mądrością - idealne połączenie ⚡",
+                    "płomień artysty, serce sąsiada 🎨",
+                    "jak gwiazda - świeci, ale nie oślepia ⭐"
+                ],
+                en: [
+                    "this music like fire in heart, but now just right 🔥",
+                    "controlled energy is poetry in motion 💫",
+                    "fire vibes with wisdom - perfect combination ⚡",
+                    "artist's flame, neighbor's heart 🎨",
+                    "like a star - shines but doesn't blind ⭐"
+                ]
+            }
         };
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎵 NeighborlyVolume Neighbor Control starting...');
+            
+            // Restore language preference
+            const savedLang = localStorage.getItem('neighborly_neighbor_language') || 'pl';
+            setLanguage(savedLang);
             
             // Get linkId from URL
             const pathParts = window.location.pathname.split('/');
@@ -853,7 +1088,7 @@
                 document.getElementById('loading-section').classList.add('hidden');
                 document.getElementById('control-section').classList.remove('hidden');
                 
-                showNotification('🎵 Połączono z muzyką sąsiada!', 'success');
+                showNotification(translations[appState.currentLanguage]['connected-neighbor'], 'success');
                 
                 // Start periodic updates
                 startStatusUpdates();
@@ -883,7 +1118,7 @@
                     img.classList.remove('hidden');
                 }
             } else {
-                document.getElementById('track-name').textContent = 'Brak aktywnej muzyki';
+                document.getElementById('track-name').textContent = appState.currentLanguage === 'pl' ? 'Brak aktywnej muzyki' : 'No active music';
                 document.getElementById('track-artist').textContent = '';
                 document.getElementById('track-album').textContent = '';
             }
@@ -911,12 +1146,12 @@
             
             if (controllerId) {
                 const displayName = controllerId === appState.neighborId ? 
-                    'Ty' : 
-                    (controllerId.startsWith('neighbor_') ? 'Inny sąsiad' : controllerId);
+                    translations[appState.currentLanguage]['you-control'] : 
+                    (controllerId.startsWith('neighbor_') ? translations[appState.currentLanguage]['other-neighbor'] : controllerId);
                 
                 controllerInfo.classList.remove('inactive');
                 pulseIndicator.classList.remove('inactive');
-                controllerText.textContent = `${displayName} obecnie kontroluje głośność`;
+                controllerText.textContent = `${displayName} ${translations[appState.currentLanguage]['controls-volume']}`;
                 
                 appState.currentController = controllerId;
                 
@@ -926,7 +1161,7 @@
                         if (appState.currentController === controllerId) {
                             controllerInfo.classList.add('inactive');
                             pulseIndicator.classList.add('inactive');
-                            controllerText.textContent = 'Nikt obecnie nie kontroluje głośności';
+                            controllerText.textContent = translations[appState.currentLanguage]['no-controller'];
                             appState.currentController = null;
                         }
                     }, 5000);
@@ -934,12 +1169,12 @@
             } else {
                 controllerInfo.classList.add('inactive');
                 pulseIndicator.classList.add('inactive');
-                controllerText.textContent = 'Nikt obecnie nie kontroluje głośności';
+                controllerText.textContent = translations[appState.currentLanguage]['no-controller'];
                 appState.currentController = null;
             }
         }
 
-        // NOWE: Update mode indicators
+        // Update mode indicators
         function updateModeIndicators() {
             const container = document.getElementById('mode-indicators');
             container.innerHTML = '';
@@ -966,12 +1201,12 @@
             }
         }
 
-        // NOWE: Update body classes for visual effects
+        // Update body classes for visual effects
         function updateBodyClasses() {
             document.body.classList.toggle('rainbow-mode', appState.globalModes.rainbowMode);
         }
 
-        // NOWE: Show Easter Egg notification
+        // Show Easter Egg notification
         function showEasterEgg(easterEgg) {
             // Create special Easter Egg notification
             const easterEggDiv = document.createElement('div');
@@ -1000,15 +1235,21 @@
             const volumeDisplay = document.getElementById('volume-display');
             
             if (isConflictResolution) {
-                detailsEl.innerHTML = `
+                detailsEl.innerHTML = appState.currentLanguage === 'pl' ? `
                     <strong>Konflikt rozwiązany!</strong><br>
                     Twoja zmiana (${originalVolume}%) została uśredniona do ${volume}%<br>
                     Zmiana nastąpi za <span id="pending-countdown">${Math.ceil(delay/1000)}</span> sekund
+                ` : `
+                    <strong>Conflict resolved!</strong><br>
+                    Your change (${originalVolume}%) was averaged to ${volume}%<br>
+                    Change will happen in <span id="pending-countdown">${Math.ceil(delay/1000)}</span> seconds
                 `;
             } else {
+                const text = appState.currentLanguage === 'pl' ? 
+                    `Głośność zostanie zmieniona na ${volume}% za` :
+                    `Volume will be changed to ${volume}% in`;
                 detailsEl.innerHTML = `
-                    Głośność zostanie zmieniona na ${volume}% za 
-                    <span id="pending-countdown">${Math.ceil(delay/1000)}</span> sekund
+                    ${text} <span id="pending-countdown">${Math.ceil(delay/1000)}</span> ${appState.currentLanguage === 'pl' ? 'sekund' : 'seconds'}
                 `;
             }
             
@@ -1050,10 +1291,11 @@
             const warningEl = document.getElementById('conflict-warning');
             const detailsEl = document.getElementById('conflict-details');
             
-            detailsEl.innerHTML = `
-                ${conflictingUsers.length} osób próbuje kontrolować głośność jednocześnie.<br>
-                Twoja wartość (${originalVolume}%) została uśredniona z innymi do ${averagedVolume}%
-            `;
+            const text = appState.currentLanguage === 'pl' ? 
+                `${conflictingUsers.length} osób próbuje kontrolować głośność jednocześnie.<br>Twoja wartość (${originalVolume}%) została uśredniona z innymi do ${averagedVolume}%` :
+                `${conflictingUsers.length} people are trying to control volume simultaneously.<br>Your value (${originalVolume}%) was averaged with others to ${averagedVolume}%`;
+            
+            detailsEl.innerHTML = text;
             
             warningEl.classList.remove('hidden');
             
@@ -1066,7 +1308,7 @@
         // Control volume
         async function controlVolume(volume) {
             if (appState.isRateLimited) {
-                showNotification('⏳ Poczekaj chwilę przed następną zmianą', 'warning');
+                showNotification(translations[appState.currentLanguage]['waiting-for-changes'], 'warning');
                 return;
             }
 
@@ -1091,15 +1333,25 @@
                     // Re-enable after retry time
                     setTimeout(() => {
                         appState.isRateLimited = false;
-                        showNotification('✅ Możesz ponownie kontrolować głośność', 'success');
+                        const reenabledText = appState.currentLanguage === 'pl' ? 
+                            '✅ Możesz ponownie kontrolować głośność' :
+                            '✅ You can control volume again';
+                        showNotification(reenabledText, 'success');
                     }, data.retryAfter * 1000);
                     
                     return;
                 }
                 
                 if (data.success) {
-                    updateStatusText(`🔊 Zmiana głośności na ${volume}% zaplanowana`);
-                    showNotification(`🔊 Zmiana na ${volume}% zostanie zastosowana`, 'info');
+                    const scheduledText = appState.currentLanguage === 'pl' ? 
+                        `🔊 Zmiana głośności na ${volume}% zaplanowana` :
+                        `🔊 Volume change to ${volume}% scheduled`;
+                    updateStatusText(scheduledText);
+                    
+                    const appliedText = appState.currentLanguage === 'pl' ?
+                        `🔊 Zmiana na ${volume}% zostanie zastosowana` :
+                        `🔊 Change to ${volume}% will be applied`;
+                    showNotification(appliedText, 'info');
                     
                     // Handle Easter Egg
                     if (data.easterEgg && data.easterEgg.detected) {
@@ -1111,7 +1363,7 @@
                 
             } catch (error) {
                 console.error('Volume control error:', error);
-                showNotification('❌ Błąd kontroli głośności', 'error');
+                showNotification(translations[appState.currentLanguage]['volume-control-error'], 'error');
             }
         }
 
@@ -1121,18 +1373,18 @@
             controlVolume(volume);
         }
 
-        // NOWE: Send custom message
+        // Send custom message
         async function sendCustomMessage() {
             const input = document.getElementById('custom-message-input');
             const message = input.value.trim();
             
             if (!message) {
-                showNotification('❌ Napisz jakąś wiadomość!', 'error');
+                showNotification(translations[appState.currentLanguage]['message-empty'], 'error');
                 return;
             }
             
             if (message.length > 200) {
-                showNotification('❌ Wiadomość za długa (max 200 znaków)', 'error');
+                showNotification(translations[appState.currentLanguage]['message-too-long'], 'error');
                 return;
             }
             
@@ -1152,11 +1404,14 @@
                 if (data.success) {
                     // Check if it was a secret command
                     if (data.secretActivated) {
-                        showNotification(`🎭 ${data.message}`, 'success');
+                        showNotification(`${translations[appState.currentLanguage]['secret-activated']} ${data.message}`, 'success');
                         // Don't clear input for secret commands so user can see what they typed
                     } else {
-                        updateStatusText(`📤 Wysłano: "${data.message || message}"`);
-                        showNotification('📤 Wiadomość wysłana!', 'success');
+                        const sentText = appState.currentLanguage === 'pl' ?
+                            `📤 Wysłano: "${data.message || message}"` :
+                            `📤 Sent: "${data.message || message}"`;
+                        updateStatusText(sentText);
+                        showNotification(translations[appState.currentLanguage]['message-sent'], 'success');
                         input.value = ''; // Clear input only for regular messages
                     }
                     
@@ -1167,7 +1422,10 @@
                     
                     // Handle applied modes
                     if (data.appliedModes && data.appliedModes.length > 0) {
-                        showNotification(`✨ Zastosowano tryby: ${data.appliedModes.join(', ')}`, 'info');
+                        const modesText = appState.currentLanguage === 'pl' ?
+                            `✨ Zastosowano tryby: ${data.appliedModes.join(', ')}` :
+                            `✨ Applied modes: ${data.appliedModes.join(', ')}`;
+                        showNotification(modesText, 'info');
                     }
                     
                 } else {
@@ -1176,15 +1434,15 @@
                 
             } catch (error) {
                 console.error('Send custom message error:', error);
-                showNotification('❌ Błąd wysyłania wiadomości', 'error');
+                showNotification(translations[appState.currentLanguage]['message-error'], 'error');
             }
         }
 
         // Send emoji with poetic message
         async function sendEmoji(emoji, fallbackMessage) {
             try {
-                // Get random poetic message
-                const messages = poeticMessages[emoji] || [fallbackMessage];
+                // Get random poetic message in current language
+                const messages = poeticMessages[emoji] ? poeticMessages[emoji][appState.currentLanguage] : [fallbackMessage];
                 const poeticMessage = messages[Math.floor(Math.random() * messages.length)];
                 
                 const response = await fetch(`/api/control/${appState.linkId}`, {
@@ -1200,8 +1458,11 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    updateStatusText(`${emoji} Wysłano: "${data.message || poeticMessage}"`);
-                    showNotification(`${emoji} Wiadomość wysłana!`, 'success');
+                    const sentText = appState.currentLanguage === 'pl' ?
+                        `${emoji} Wysłano: "${data.message || poeticMessage}"` :
+                        `${emoji} Sent: "${data.message || poeticMessage}"`;
+                    updateStatusText(sentText);
+                    showNotification(`${emoji} ${translations[appState.currentLanguage]['message-sent']}`, 'success');
                     
                     // Animate emoji button
                     animateButton(event.target);
@@ -1216,21 +1477,31 @@
                 
             } catch (error) {
                 console.error('Send emoji error:', error);
-                showNotification('❌ Błąd wysyłania wiadomości', 'error');
+                showNotification(translations[appState.currentLanguage]['message-error'], 'error');
             }
         }
 
         // Send thank you message
         async function sendThankYou() {
-            const thankYouMessages = [
-                "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕",
-                "słodka harmonia między nami jak kawka o poranku ☀️",
-                "w rytmie serca i muzyki - dziękuję za cierpliwość 💙",
-                "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵",
-                "miłość sąsiedzka piękniejsza niż każda ballada 💕"
-            ];
+            const thankYouMessages = {
+                pl: [
+                    "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕",
+                    "słodka harmonia między nami jak kawka o poranku ☀️",
+                    "w rytmie serca i muzyki - dziękuję za cierpliwość 💙",
+                    "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵",
+                    "miłość sąsiedzka piękniejsza niż każda ballada 💕"
+                ],
+                en: [
+                    "like sea calms waves, so you calm my speakers 🌊 ☕",
+                    "sweet harmony between us like morning coffee ☀️",
+                    "in rhythm of heart and music - thank you for patience 💙",
+                    "poetry is you, melody is me, together we create symphony 🎵",
+                    "neighborly love more beautiful than any ballad 💕"
+                ]
+            };
             
-            const randomMessage = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
+            const messages = thankYouMessages[appState.currentLanguage];
+            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
             
             try {
                 const response = await fetch(`/api/control/${appState.linkId}`, {
@@ -1246,8 +1517,15 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    updateStatusText(`❤️ Podziękowanie: "${data.message || randomMessage}"`);
-                    showNotification('❤️ Poetyckie dzięki wysłane!', 'success');
+                    const sentText = appState.currentLanguage === 'pl' ?
+                        `❤️ Podziękowanie: "${data.message || randomMessage}"` :
+                        `❤️ Thank you: "${data.message || randomMessage}"`;
+                    updateStatusText(sentText);
+                    
+                    const thanksText = appState.currentLanguage === 'pl' ?
+                        '❤️ Poetyckie dzięki wysłane!' :
+                        '❤️ Poetic thanks sent!';
+                    showNotification(thanksText, 'success');
                     
                     // Animate button
                     animateButton(event.target);
@@ -1262,7 +1540,7 @@
                 
             } catch (error) {
                 console.error('Send thank you error:', error);
-                showNotification('❌ Błąd wysyłania podziękowania', 'error');
+                showNotification(translations[appState.currentLanguage]['message-error'], 'error');
             }
         }
 
@@ -1283,8 +1561,9 @@
                 `<span class="connection-indicator"></span>${message}`;
             
             setTimeout(() => {
+                const defaultText = translations[appState.currentLanguage]['connected-status'];
                 document.getElementById('status-text').innerHTML = 
-                    '<span class="connection-indicator"></span>Połączono z systemem sąsiada • Wszystko działa prawidłowo';
+                    `<span class="connection-indicator"></span>${defaultText}`;
             }, 5000);
         }
 
@@ -1329,7 +1608,7 @@
             }, 10000); // Update every 10 seconds
         }
 
-        // Connect WebSocket for real-time updates (FIXED)
+        // Connect WebSocket for real-time updates
         function connectWebSocket() {
             appState.socket = io();
             
@@ -1360,7 +1639,8 @@
                     case 'volume_applied':
                         hidePendingChange();
                         updateVolumeDisplay(data.volume);
-                        showNotification(`✅ Głośność zmieniona na ${data.volume}%`, 'success');
+                        const appliedText = `${translations[appState.currentLanguage]['volume-applied']} ${data.volume}%`;
+                        showNotification(appliedText, 'success');
                         break;
                         
                     case 'conflict_detected':
