@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeighborlyVolume - Spotify Control</title>
+    
+    <!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FS0WMZDR66"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-FS0WMZDR66');
+  
+  // Custom events
+  function trackEvent(action, category, label) {
+    gtag('event', action, {
+      event_category: category,
+      event_label: label
+    });
+  }
+</script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -379,7 +396,7 @@
                     <p data-i18n="welcome-user">Witaj, <strong id="user-name">...</strong>!</p>
                     
                     <div style="margin: 15px 0;">
-                        <button class="btn disconnect" onclick="disconnectSpotify()">
+                        <button class="btn disconnect" onclick="dis">
                             <span data-i18n="disconnect-btn">🚪 Rozłącz ze Spotify</span>
                         </button>
                     </div>
@@ -730,11 +747,14 @@
         }
 
         // Connect to Spotify
-        function connectSpotify() {
-            showNotification(translations[appState.currentLanguage]['redirecting'], 'info');
-            clearSavedSession(); // Clear any old session before connecting
-            window.location.href = '/auth/login';
-        }
+       function connectSpotify() {
+    gtag('event', 'spotify_connect_attempt', {
+        event_category: 'authentication',
+        event_label: 'main_page'
+    });
+    showNotification('🔄 Przekierowywanie do Spotify...', 'info');
+    window.location.href = '/auth/login';
+}
 
         // Disconnect function
         function disconnectSpotify() {
@@ -772,8 +792,11 @@
 
                 const data = await response.json();
                 
-                if (data.success) {
-                    appState.currentSession = data.linkId;
+             if (data.success) {
+    gtag('event', 'link_generated', {
+        event_category: 'sharing',
+        event_label: 'neighbor_link'
+    });
                     
                     // Save session ID to localStorage
                     const savedUserName = localStorage.getItem('neighborly_userName');
