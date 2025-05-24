@@ -737,9 +737,17 @@
                 document.getElementById('share-url').textContent = `${window.location.origin}/control/${existingSessionId}`;
                 document.getElementById('link-display').classList.remove('hidden');
                 
-                // Start session monitoring
+                // Start session monitoring - JOIN THE RESTORED SESSION!
                 if (appState.socket) {
                     appState.socket.emit('join_session', existingSessionId);
+                    
+                    // Set up session-specific listener for restored session
+                    appState.socket.on(`session_${existingSessionId}`, (sessionData) => {
+                        console.log('📡 Restored session data received:', sessionData);
+                        if (sessionData.type === 'neighbor_action') {
+                            handleNeighborAction(sessionData.data);
+                        }
+                    });
                 }
                 
                 showNotification(`${translations[appState.currentLanguage]['session-restored']} ${userName}`, 'success');
@@ -828,9 +836,17 @@
                     
                     showNotification(translations[appState.currentLanguage]['link-generated'], 'success');
                     
-                    // Start session monitoring
+                    // Start session monitoring - JOIN THE SESSION!
                     if (appState.socket) {
                         appState.socket.emit('join_session', data.linkId);
+                        
+                        // Set up session-specific listener
+                        appState.socket.on(`session_${data.linkId}`, (sessionData) => {
+                            console.log('📡 Session data received:', sessionData);
+                            if (sessionData.type === 'neighbor_action') {
+                                handleNeighborAction(sessionData.data);
+                            }
+                        });
                     }
                     
                     startSessionTimer();
@@ -927,32 +943,52 @@
             
             appState.socket.on('connect', () => {
                 console.log('🔌 WebSocket connected');
+                
+                // Join session if we have one
+                if (appState.currentSession) {
+                    appState.socket.emit('join_session', appState.currentSession);
+                }
             });
             
             appState.socket.on('disconnect', () => {
                 console.log('❌ WebSocket disconnected');
             });
             
-            // Listen for neighbor actions
+            // Listen for neighbor actions - FIXED!
             appState.socket.on('session_update', (data) => {
-                if (data.type === 'neighbor_action') {
+                console.log('📡 Received session update:', data);
+                if (data.type === 'neighbor_action' && data.linkId === appState.currentSession) {
                     handleNeighborAction(data.data);
                 }
             });
+            
+            // ALSO listen on the specific session channel
+            if (appState.currentSession) {
+                appState.socket.on(`session_${appState.currentSession}`, (data) => {
+                    console.log('📡 Received session-specific update:', data);
+                    if (data.type === 'neighbor_action') {
+                        handleNeighborAction(data.data);
+                    }
+                });
+            }
         }
 
         // Handle neighbor action
         function handleNeighborAction(action) {
+            console.log('🎭 Processing neighbor action:', action);
+            
             // Update stats
             const currentChanges = parseInt(document.getElementById('volume-changes').textContent) || 0;
             const currentMessages = parseInt(document.getElementById('total-messages').textContent) || 0;
             
             if (action.action === 'volume_change') {
                 document.getElementById('volume-changes').textContent = currentChanges + 1;
+                console.log('📊 Updated volume changes to:', currentChanges + 1);
             }
             
             if (action.message) {
                 document.getElementById('total-messages').textContent = currentMessages + 1;
+                console.log('📊 Updated message count to:', currentMessages + 1);
             }
             
             // Add to activity feed
@@ -975,6 +1011,7 @@
             }
             
             if (activityText) {
+                console.log('📝 Adding activity item:', activityText);
                 addActivityItem(time, activityText);
             }
             
