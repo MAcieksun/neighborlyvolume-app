@@ -40,77 +40,59 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ===== PRZECHOWYWANIE SESJI =====
 const activeSessions = new Map();
 const userTokens = new Map();
-const neighborAuthorizations = new Map();
 
-// ===== SYSTEM AUTORYZACJI =====
-class AuthorizationManager {
-    constructor() {
-        this.maxNeighbors = 10;
-        this.defaultDailyLimit = 20;
-        this.emergencyOverrideDuration = 300000;
-        console.log('🔐 Authorization Manager initialized');
-    }
-    
-    createSessionAuth(linkId, ownerId) {
-        const sessionAuth = {
-            ownerId: ownerId,
-            createdAt: Date.now(),
-            neighbors: new Map(),
-            pendingInvites: new Map(),
-            emergencyMode: false,
-            emergencyUntil: null,
-            sessionSettings: {
-                maxVolume: 100,
-                minVolume: 0,
-                quietHours: {
-                    start: 22,
-                    end: 8,
-                    maxVolume: 30
-                },
-                autoAcceptInvites: false,
-                requireOwnerApproval: false // Simplified for demo
-            }
-        };
-        
-        neighborAuthorizations.set(linkId, sessionAuth);
-        return sessionAuth;
-    }
-    
-    checkPermission(linkId, neighborId, action, params = {}) {
-        const sessionAuth = neighborAuthorizations.get(linkId);
-        if (!sessionAuth) return { allowed: true, reason: 'No auth system active' };
-        
-        // Owner has full permissions
-        if (neighborId === sessionAuth.ownerId) {
-            return { allowed: true, reason: 'Owner privileges' };
-        }
-        
-        // Emergency mode check
-        if (sessionAuth.emergencyMode) {
-            return { allowed: false, reason: 'Emergency mode active - only owner can control' };
-        }
-        
-        // For now, allow all actions (simplified)
-        return { allowed: true, reason: 'Permission granted' };
-    }
-    
-    incrementUsage(linkId, neighborId, type) {
-        // Simplified - just log usage
-        console.log(`📊 Usage: ${neighborId} performed ${type} in session ${linkId}`);
-    }
-    
-    getAuthStats(linkId) {
-        const sessionAuth = neighborAuthorizations.get(linkId);
-        if (!sessionAuth) return null;
-        
-        return {
-            ownerId: sessionAuth.ownerId,
-            neighborsCount: sessionAuth.neighbors.size,
-            emergencyMode: sessionAuth.emergencyMode,
-            sessionSettings: sessionAuth.sessionSettings
-        };
-    }
-}
+// ===== EASTER EGGS =====
+const FAVORITE_ARTISTS = [
+    'nightwish', 'within temptation', 'epica', 'closterkeller', 
+    'bjork', 'björk', 'tori amos'
+];
+
+const EASTER_EGG_MESSAGES = {
+    'nightwish': [
+        "🌙 Wishmaster! Ten utwór to prawdziwa magia symfonii metalowej! ✨",
+        "🎭 Tarja lub Floor - obojętnie kto śpiewa, to zawsze jest epickie! 🎵",
+        "❄️ Finnish metal magic w powietrzu - absolutna perfekcja! 🇫🇮",
+        "🌟 Ghost Love Score gra? Nie można tego słuchać cicho! 💫"
+    ],
+    'within temptation': [
+        "🏰 Sharon Den Adel - głos aniołów i potęga orkiestr! 👑",
+        "🖤 Gothic metal w najczystszej postaci - ciężko nie łkać! 💜",
+        "⚡ Ice Queen czy Angels? Każdy utwór to emocjonalna podróż! 🎪",
+        "🎻 Orkiestrowe brzmienia + metal = receptura na szczęście! 🎼"
+    ],
+    'epica': [
+        "🎭 Simone Simons i jej operowy głos to definicja perfekcji! 👸",
+        "⚔️ Symphonic metal w wykonaniu mistrzów - filozofia w dźwiękach! 🛡️",
+        "🌊 Design Your Universe to ocean emocji i mądrości! 🌌",
+        "🎪 Mark Jansen wie jak tworzyć muzyczne eposy! 📚"
+    ],
+    'closterkeller': [
+        "🇵🇱 Anja Orthodox - ikona polskiego gothicu! Niemożliwe nie pokochać! 🖤",
+        "🌹 Gothic rock made in Poland - unikatowe brzmienie! 🥀",
+        "💀 Mroczne, piękne i absolutnie hipnotyzujące! 🕯️",
+        "🎭 Polski underground w najlepszym wydaniu! 🎨"
+    ],
+    'bjork': [
+        "🌋 Icelandic goddess of experimental music! 🇮🇸",
+        "🦢 Jej głos to połączenie natury i technologii - pure art! 🎨",
+        "💎 Każdy album to nowy wszechświat dźwięków! 🪐",
+        "🧚‍♀️ Björk to nie muzyka, to doświadczenie transcendentne! ✨"
+    ],
+    'tori amos': [
+        "🎹 Piano goddess! Jej palce tańczą po klawiszach jak poezja! 📝",
+        "🌸 Little Earthquakes to trzęsienie ziemi emocji! 💐",
+        "🔥 Cornflake Girl - ekscentryczna, genialna, niepowtarzalna! 🌾",
+        "💫 Tori to połączenie klasyki, rocka i czystej magii! 🎪"
+    ]
+};
+
+// Hidden modes
+let globalModes = {
+    catMode: false,
+    poetryMode: false,
+    rainbowMode: false,
+    magicMode: false
+};
 
 // ===== RATE LIMITING =====
 class VolumeRateLimiter {
@@ -271,10 +253,80 @@ class ConflictResolver {
     }
 }
 
+// ===== EASTER EGG DETECTOR =====
+function detectEasterEgg(trackName, artistName) {
+    const searchText = `${trackName} ${artistName}`.toLowerCase();
+    
+    for (const artist of FAVORITE_ARTISTS) {
+        if (searchText.includes(artist)) {
+            const messages = EASTER_EGG_MESSAGES[artist] || EASTER_EGG_MESSAGES[artist.replace('ö', 'o')];
+            if (messages) {
+                return {
+                    detected: true,
+                    artist: artist,
+                    message: messages[Math.floor(Math.random() * messages.length)]
+                };
+            }
+        }
+    }
+    
+    return { detected: false };
+}
+
 // ===== INICJALIZACJA SYSTEMÓW =====
-const authManager = new AuthorizationManager();
 const rateLimiter = new VolumeRateLimiter();
 const conflictResolver = new ConflictResolver();
+
+// ===== SESSION MANAGEMENT ENDPOINTS =====
+app.get('/api/session/check/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = activeSessions.get(sessionId);
+    
+    if (session) {
+        // Check if user tokens are still valid
+        try {
+            const response = await axios.get('https://api.spotify.com/v1/me', {
+                headers: { 'Authorization': `Bearer ${session.accessToken}` },
+                timeout: 5000
+            });
+            
+            res.json({ 
+                valid: true, 
+                userId: session.userId,
+                sessionId: sessionId,
+                user: response.data
+            });
+        } catch (error) {
+            res.status(401).json({ valid: false, reason: 'Token expired' });
+        }
+    } else {
+        res.status(404).json({ valid: false, reason: 'Session not found' });
+    }
+});
+
+app.post('/api/user/check', async (req, res) => {
+    const { userId } = req.body;
+    const userToken = userTokens.get(userId);
+    
+    if (userToken) {
+        try {
+            const response = await axios.get('https://api.spotify.com/v1/me', {
+                headers: { 'Authorization': `Bearer ${userToken.access_token}` },
+                timeout: 5000
+            });
+            
+            res.json({ 
+                valid: true, 
+                userId: userId,
+                user: response.data
+            });
+        } catch (error) {
+            res.status(401).json({ valid: false, reason: 'Token expired' });
+        }
+    } else {
+        res.status(404).json({ valid: false, reason: 'User not found' });
+    }
+});
 
 // ===== DEBUG ENDPOINT =====
 app.get('/api/debug', (req, res) => {
@@ -289,6 +341,7 @@ app.get('/api/debug', (req, res) => {
             active: activeSessions.size,
             users: userTokens.size
         },
+        globalModes: globalModes,
         timestamp: new Date().toISOString()
     });
 });
@@ -403,9 +456,6 @@ app.post('/api/create-link', async (req, res) => {
             controlHistory: []
         });
         
-        // Create authorization system
-        authManager.createSessionAuth(linkId, userId);
-        
         console.log('✅ Link created:', linkId);
         
         res.json({ 
@@ -425,12 +475,12 @@ app.post('/api/create-link', async (req, res) => {
     }
 });
 
-// ===== 🚨 GŁÓWNY ENDPOINT KONTROLI GŁOŚNOŚCI =====
+// ===== GŁÓWNY ENDPOINT KONTROLI GŁOŚNOŚCI =====
 app.put('/api/control/:linkId', async (req, res) => {
     const { linkId } = req.params;
-    const { volume, neighborId, action, message } = req.body;
+    const { volume, neighborId, action, message, customMessage } = req.body;
     
-    console.log(`🎛️ Control request - Link: ${linkId}, Volume: ${volume}, Neighbor: ${neighborId}, Action: ${action}`);
+    console.log(`🎛️ Control request - Link: ${linkId}, Volume: ${volume}, Neighbor: ${neighborId}, Action: ${action}, Custom: ${customMessage}`);
     
     const session = activeSessions.get(linkId);
     if (!session) {
@@ -439,18 +489,6 @@ app.put('/api/control/:linkId', async (req, res) => {
     }
     
     try {
-        // Check authorization
-        const actionType = volume !== undefined ? 'volume_control' : 'send_message';
-        const permissionCheck = authManager.checkPermission(linkId, neighborId, actionType, { volume });
-        
-        if (!permissionCheck.allowed) {
-            console.log(`❌ Permission denied for ${neighborId}: ${permissionCheck.reason}`);
-            return res.status(403).json({ 
-                error: 'Permission denied', 
-                reason: permissionCheck.reason
-            });
-        }
-        
         // Handle VOLUME CHANGE
         if (volume !== undefined) {
             console.log(`🔊 Processing volume change: ${volume}%`);
@@ -474,23 +512,26 @@ app.put('/api/control/:linkId', async (req, res) => {
             if (!success) {
                 throw new Error('Failed to handle volume change');
             }
-            
-            // Update usage stats
-            authManager.incrementUsage(linkId, neighborId, 'volume');
         }
         
-        // Handle MESSAGE ONLY (emoji, thank you, etc.)
-        if (volume === undefined && (action === 'emoji_message' || action === 'thank_you' || message)) {
-            console.log(`💬 Processing message: ${action} - "${message}"`);
+        // Handle CUSTOM MESSAGE
+        let finalMessage = message;
+        if (customMessage) {
+            console.log(`💬 Processing custom message: "${customMessage}"`);
             
-            // Light rate limiting for messages (more permissive)
-            if (!rateLimiter.canAdjustVolume(neighborId)) {
-                // Allow messages even if volume is rate limited, but log it
-                console.log(`⚠️ Message sent while volume rate limited: ${neighborId}`);
+            // Check for secret commands first
+            const secretResult = checkSecretCommands(customMessage, linkId);
+            if (secretResult.isSecret) {
+                return res.json(secretResult.response);
             }
             
-            // Update usage stats
-            authManager.incrementUsage(linkId, neighborId, 'message');
+            // Apply global modes to custom message
+            finalMessage = applyGlobalModes(customMessage);
+        }
+        
+        // Handle MESSAGE ONLY (emoji, thank you, custom, etc.)
+        if (volume === undefined && (action === 'emoji_message' || action === 'thank_you' || action === 'custom_message' || finalMessage)) {
+            console.log(`💬 Processing message: ${action} - "${finalMessage}"`);
         }
         
         // Add to neighbor actions history
@@ -498,8 +539,9 @@ app.put('/api/control/:linkId', async (req, res) => {
             neighborId: neighborId || 'Anonymous',
             action: action || (volume !== undefined ? 'volume_change' : 'message'),
             volume: volume,
-            message: message,
-            timestamp: new Date()
+            message: finalMessage,
+            timestamp: new Date(),
+            isCustom: !!customMessage
         };
         
         session.neighbors.push(neighborAction);
@@ -509,9 +551,19 @@ app.put('/api/control/:linkId', async (req, res) => {
             userId: neighborId,
             action: action || (volume !== undefined ? 'volume_change' : 'message'),
             volume: volume,
-            message: message,
-            timestamp: Date.now()
+            message: finalMessage,
+            timestamp: Date.now(),
+            isCustom: !!customMessage
         });
+        
+        // Check for Easter Eggs in current track
+        let easterEgg = null;
+        if (session.currentTrack) {
+            easterEgg = detectEasterEgg(
+                session.currentTrack.name || '',
+                session.currentTrack.artists?.[0]?.name || ''
+            );
+        }
         
         // Send WebSocket update
         io.emit(`session_${linkId}`, {
@@ -520,7 +572,9 @@ app.put('/api/control/:linkId', async (req, res) => {
             session: {
                 volume: session.volume, // Current volume
                 neighbors: session.neighbors.length
-            }
+            },
+            easterEgg: easterEgg?.detected ? easterEgg : null,
+            globalModes: globalModes
         });
         
         console.log(`✅ Control request processed for ${neighborId}`);
@@ -532,14 +586,17 @@ app.put('/api/control/:linkId', async (req, res) => {
                 volume: volume,
                 isPending: true,
                 message: 'Volume change scheduled',
-                remainingTokens: rateLimiter.getRemainingTokens(neighborId)
+                remainingTokens: rateLimiter.getRemainingTokens(neighborId),
+                easterEgg: easterEgg?.detected ? easterEgg : null
             });
         } else {
             res.json({ 
                 success: true, 
                 action: action,
-                message: 'Message sent successfully',
-                timestamp: Date.now()
+                message: finalMessage || 'Message sent successfully',
+                timestamp: Date.now(),
+                easterEgg: easterEgg?.detected ? easterEgg : null,
+                appliedModes: Object.keys(globalModes).filter(mode => globalModes[mode])
             });
         }
         
@@ -551,6 +608,132 @@ app.put('/api/control/:linkId', async (req, res) => {
         });
     }
 });
+
+// ===== APPLY GLOBAL MODES =====
+function applyGlobalModes(message) {
+    let result = message;
+    
+    if (globalModes.catMode) {
+        // Replace some words with cat versions
+        result = result
+            .replace(/music/gi, 'mewzic')
+            .replace(/dzięki/gi, 'dziękuje *miau*')
+            .replace(/thanks/gi, 'thanks *purr*')
+            .replace(/hello/gi, 'miau')
+            .replace(/loud/gi, 'loud *hiss*')
+            .replace(/głośno/gi, 'głośno *miau*');
+        result += ' 🐱';
+    }
+    
+    if (globalModes.poetryMode) {
+        // Add extra poetic flair
+        const poeticEndings = [
+            '... jak wiersz napisany nutami 📜',
+            '... w rytmie serca i melodii duszy 💫',
+            '... gdzie słowa tańczą z dźwiękami 🎭',
+            '... poezja to muzyka dla oczu 👁️‍🗨️',
+            '... każda nuta jak słowo w wierszu kosmosu ✨'
+        ];
+        result += ' ' + poeticEndings[Math.floor(Math.random() * poeticEndings.length)];
+    }
+    
+    if (globalModes.rainbowMode) {
+        // Add rainbow elements
+        result += ' 🌈✨🎨🦄💫';
+    }
+    
+    if (globalModes.magicMode) {
+        // Ultimate magic combination
+        result = '✨🦄 ' + result + ' 🦄✨';
+        result += ' 🌟💫🎪⭐🌙';
+    }
+    
+    return result;
+}
+
+// ===== SECRET COMMANDS =====
+function checkSecretCommands(message, linkId) {
+    const cmd = message.toLowerCase().trim();
+    
+    // ULTIMATE SECRET COMMAND
+    if (cmd.includes('secret admin') || cmd.includes('magic sparkles')) {
+        globalModes.magicMode = !globalModes.magicMode;
+        globalModes.catMode = globalModes.magicMode;
+        globalModes.poetryMode = globalModes.magicMode;
+        globalModes.rainbowMode = globalModes.magicMode;
+        
+        return {
+            isSecret: true,
+            response: {
+                success: true,
+                secretActivated: 'ultimate_magic_mode',
+                message: globalModes.magicMode 
+                    ? '✨🦄 MAGIC MODE ACTIVATED! 🦄✨ Jesteś prawdziwą czarodziejką technologii! Twoja aplikacja teraz świeci jak gwiazda w cyfrowym niebie! 🌟💫🎪'
+                    : '🎭 Magic Mode wyłączony - ale magia zostaje w sercu! ✨',
+                active: globalModes.magicMode,
+                allModes: globalModes
+            }
+        };
+    }
+    
+    // Secret command: "meow mode" or "kot mode"
+    if (cmd.includes('meow mode') || cmd.includes('kot mode')) {
+        globalModes.catMode = !globalModes.catMode;
+        return {
+            isSecret: true,
+            response: {
+                success: true,
+                secretActivated: 'cat_mode',
+                message: globalModes.catMode ? '🐱 Secret Cat Mode aktywowany! Miau!' : '😸 Cat Mode wyłączony',
+                active: globalModes.catMode
+            }
+        };
+    }
+    
+    // Secret command: "poetry mode" or "tryb poetycki"
+    if (cmd.includes('poetry mode') || cmd.includes('tryb poetycki')) {
+        globalModes.poetryMode = !globalModes.poetryMode;
+        return {
+            isSecret: true,
+            response: {
+                success: true,
+                secretActivated: 'poetry_mode',
+                message: globalModes.poetryMode ? '📜 Secret Ultra Poetry Mode aktywowany!' : '📝 Poetry Mode wyłączony',
+                active: globalModes.poetryMode
+            }
+        };
+    }
+    
+    // Secret command: "rainbow mode" or "tęcza mode"
+    if (cmd.includes('rainbow mode') || cmd.includes('tęcza mode')) {
+        globalModes.rainbowMode = !globalModes.rainbowMode;
+        return {
+            isSecret: true,
+            response: {
+                success: true,
+                secretActivated: 'rainbow_mode',
+                message: globalModes.rainbowMode ? '🌈 Secret Rainbow Mode aktywowany!' : '🎨 Rainbow Mode wyłączony',
+                active: globalModes.rainbowMode
+            }
+        };
+    }
+    
+    // Secret command: "status" or "easter egg"
+    if (cmd.includes('status') || cmd.includes('easter egg')) {
+        return {
+            isSecret: true,
+            response: {
+                success: true,
+                secretActivated: 'status_check',
+                message: `🎭 Secret Status: Cat ${globalModes.catMode ? '🐱' : '😴'} | Poetry ${globalModes.poetryMode ? '📜' : '📝'} | Rainbow ${globalModes.rainbowMode ? '🌈' : '🎨'} | Magic ${globalModes.magicMode ? '✨' : '💤'}`,
+                globalModes: globalModes
+            }
+        };
+    }
+    
+    return { isSecret: false };
+}
+
 // ===== STATUS SESJI =====
 app.get('/api/status/:linkId', async (req, res) => {
     const { linkId } = req.params;
@@ -566,6 +749,8 @@ app.get('/api/status/:linkId', async (req, res) => {
         
         // Get current status from Spotify
         let playerData = null;
+        let easterEgg = null;
+        
         try {
             const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
                 headers: { 'Authorization': `Bearer ${session.accessToken}` },
@@ -578,6 +763,14 @@ app.get('/api/status/:linkId', async (req, res) => {
                 session.currentTrack = playerData.item;
                 session.isPlaying = playerData.is_playing;
                 session.volume = playerData.device?.volume_percent || session.volume;
+                
+                // Check for Easter Eggs
+                if (playerData.item) {
+                    easterEgg = detectEasterEgg(
+                        playerData.item.name || '',
+                        playerData.item.artists?.[0]?.name || ''
+                    );
+                }
             }
         } catch (playerError) {
             console.log('⚠️ Player status unavailable, using cached data');
@@ -585,7 +778,6 @@ app.get('/api/status/:linkId', async (req, res) => {
         
         const conflictStats = conflictResolver.getConflictStats(linkId);
         const currentController = conflictResolver.getCurrentController(linkId);
-        const authStats = authManager.getAuthStats(linkId);
         
         console.log(`📊 Session ${linkId} status: ${session.volume}% volume, controller: ${currentController}`);
         
@@ -608,8 +800,8 @@ app.get('/api/status/:linkId', async (req, res) => {
                 lastVolumeChange: session.lastVolumeChange,
                 totalVolumeChanges: session.controlHistory.length
             },
-            authStats: authStats,
-            emergencyMode: authStats?.emergencyMode || false
+            globalModes: globalModes,
+            easterEgg: easterEgg?.detected ? easterEgg : null
         });
         
     } catch (error) {
@@ -617,7 +809,6 @@ app.get('/api/status/:linkId', async (req, res) => {
         
         const conflictStats = conflictResolver.getConflictStats(linkId);
         const currentController = conflictResolver.getCurrentController(linkId);
-        const authStats = authManager.getAuthStats(linkId);
         
         res.json({ 
             isPlaying: session.isPlaying || false, 
@@ -633,49 +824,10 @@ app.get('/api/status/:linkId', async (req, res) => {
                 lastVolumeChange: session.lastVolumeChange,
                 totalVolumeChanges: session.controlHistory.length
             },
-            authStats: authStats,
-            emergencyMode: authStats?.emergencyMode || false
+            globalModes: globalModes,
+            easterEgg: null
         });
     }
-});
-
-// ===== DEBUG SESSION =====
-app.get('/api/debug/:linkId', (req, res) => {
-    const { linkId } = req.params;
-    const session = activeSessions.get(linkId);
-    
-    if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    const conflictStats = conflictResolver.getConflictStats(linkId);
-    const pendingChange = conflictResolver.pendingChanges.get(linkId);
-    
-    res.json({
-        session: {
-            userId: session.userId,
-            createdAt: session.createdAt,
-            volume: session.volume,
-            lastController: session.lastController,
-            neighborsCount: session.neighbors.length,
-            controlHistoryCount: session.controlHistory.length
-        },
-        conflictResolver: {
-            pendingChange: pendingChange ? {
-                userId: pendingChange.userId,
-                volume: pendingChange.volume,
-                timeRemaining: pendingChange.timestamp + 300 - Date.now()
-            } : null,
-            conflictStats: conflictStats
-        },
-        rateLimiter: {
-            userLimits: Array.from(rateLimiter.users.entries()).map(([userId, limit]) => ({
-                userId,
-                tokens: limit.tokens,
-                lastRefill: new Date(limit.lastRefill).toISOString()
-            }))
-        }
-    });
 });
 
 // ===== ROUTES =====
@@ -700,11 +852,23 @@ io.on('connection', (socket) => {
         const session = activeSessions.get(linkId);
         if (session) {
             const currentController = conflictResolver.getCurrentController(linkId);
+            
+            // Check for Easter Egg in current track
+            let easterEgg = null;
+            if (session.currentTrack) {
+                easterEgg = detectEasterEgg(
+                    session.currentTrack.name || '',
+                    session.currentTrack.artists?.[0]?.name || ''
+                );
+            }
+            
             socket.emit(`session_${linkId}`, {
                 type: 'session_joined',
                 currentController: currentController,
                 volume: session.volume,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                globalModes: globalModes,
+                easterEgg: easterEgg?.detected ? easterEgg : null
             });
         }
     });
@@ -718,7 +882,8 @@ io.on('connection', (socket) => {
         socket.emit('pong_session', {
             linkId,
             exists: !!session,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            globalModes: globalModes
         });
     });
 });
@@ -737,7 +902,8 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         activeSessions: activeSessions.size,
         rateLimiterUsers: rateLimiter.users.size,
-        memory: process.memoryUsage()
+        memory: process.memoryUsage(),
+        globalModes: globalModes
     });
 });
 
@@ -750,6 +916,9 @@ server.listen(PORT, () => {
     console.log(`🔄 Debouncing: 300ms delay for all changes`);
     console.log(`🧪 Debug endpoint: ${BASE_URL}/api/debug`);
     console.log(`❤️ Health check: ${BASE_URL}/health`);
+    console.log(`🎭 Easter eggs: Nightwish, Within Temptation, Epica, Closterkeller, Björk, Tori Amos`);
+    console.log(`🐱 Secret modes: cat, poetry, rainbow, magic`);
+    console.log(`✨ Ultra secret: "secret admin" or "magic sparkles"`);
 });
 
 // ===== CLEANUP =====
@@ -760,7 +929,6 @@ setInterval(() => {
     for (const [linkId, session] of activeSessions.entries()) {
         if (session.createdAt < oneDayAgo) {
             activeSessions.delete(linkId);
-            neighborAuthorizations.delete(linkId);
             cleanedCount++;
         }
     }
