@@ -207,8 +207,8 @@ class ConflictResolver {
             
             console.log(`✅ Volume successfully changed to ${volume}% by ${userId}`);
             
-            // Notify via WebSocket
-            io.emit(`session_${linkId}`, {
+            // Notify via WebSocket to all session participants
+            io.to(`session_${linkId}`).emit(`session_${linkId}`, {
                 type: 'volume_applied',
                 userId: userId,
                 volume: volume,
@@ -223,8 +223,8 @@ class ConflictResolver {
             session.lastController = userId;
             session.lastVolumeChange = Date.now();
             
-            // Notify of error but continue
-            io.emit(`session_${linkId}`, {
+            // Notify of error but continue to all session participants
+            io.to(`session_${linkId}`).emit(`session_${linkId}`, {
                 type: 'volume_error',
                 userId: userId,
                 volume: volume,
@@ -565,8 +565,8 @@ app.put('/api/control/:linkId', async (req, res) => {
             );
         }
         
-        // Send WebSocket update
-        io.emit(`session_${linkId}`, {
+        // Send WebSocket update to all clients in the session
+        io.to(`session_${linkId}`).emit(`session_${linkId}`, {
             type: 'neighbor_action',
             data: neighborAction,
             session: {
@@ -575,6 +575,13 @@ app.put('/api/control/:linkId', async (req, res) => {
             },
             easterEgg: easterEgg?.detected ? easterEgg : null,
             globalModes: globalModes
+        });
+        
+        // ALSO send to main page owner separately
+        io.emit('session_update', {
+            type: 'neighbor_action',
+            data: neighborAction,
+            linkId: linkId
         });
         
         console.log(`✅ Control request processed for ${neighborId}`);
