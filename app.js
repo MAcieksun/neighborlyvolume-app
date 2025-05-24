@@ -836,7 +836,15 @@ app.get('/api/status/:linkId', async (req, res) => {
         });
     }
 });
-
+// Dodaj do app.js przed routes
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'");
+    next();
+});
 // ===== ROUTES =====
 app.get('/control/:linkId', (req, res) => {
     console.log(`📱 Neighbor control page requested: ${req.params.linkId}`);
