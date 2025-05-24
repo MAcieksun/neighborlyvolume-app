@@ -34,6 +34,35 @@
             text-align: center;
             margin-bottom: 30px;
             animation: fadeInDown 1s ease-out;
+            position: relative;
+        }
+
+        .language-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            gap: 5px;
+        }
+
+        .lang-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .lang-btn.active {
+            background: #1DB954;
+            border-color: #1DB954;
+        }
+
+        .lang-btn:hover {
+            background: rgba(255,255,255,0.2);
         }
 
         .logo {
@@ -332,6 +361,13 @@
             display: none !important;
         }
 
+        .quote-attribution {
+            font-size: 0.8rem;
+            opacity: 0.6;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
         @keyframes fadeInDown {
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -369,6 +405,11 @@
             .quick-actions {
                 grid-template-columns: 1fr;
             }
+
+            .language-toggle {
+                position: relative;
+                margin-bottom: 15px;
+            }
         }
     </style>
 </head>
@@ -377,16 +418,20 @@
 
     <div class="container">
         <div class="header">
+            <div class="language-toggle">
+                <button class="lang-btn active" onclick="setLanguage('pl')" id="lang-pl">PL</button>
+                <button class="lang-btn" onclick="setLanguage('en')" id="lang-en">EN</button>
+            </div>
             <div class="logo">🎵 NeighborlyVolume</div>
-            <div class="subtitle">Sąsiedzka Kontrola Głośności</div>
+            <div class="subtitle" data-i18n="subtitle">Sąsiedzka Kontrola Głośności</div>
         </div>
 
         <!-- LOADING STATE -->
         <div class="card" id="loading-section">
             <div class="loading-section">
                 <div class="spinner"></div>
-                <h3>Łączenie z systemem...</h3>
-                <p style="opacity: 0.7; margin-top: 10px;">
+                <h3 data-i18n="connecting">Łączenie z systemem...</h3>
+                <p style="opacity: 0.7; margin-top: 10px;" data-i18n="connecting-desc">
                     Sprawdzamy połączenie z muzyką sąsiada
                 </p>
             </div>
@@ -396,8 +441,8 @@
         <div class="card hidden" id="error-section">
             <div class="error-section">
                 <div class="error-icon">❌</div>
-                <h3>Sesja nie została znaleziona</h3>
-                <p style="opacity: 0.7; margin-top: 15px;">
+                <h3 data-i18n="session-not-found">Sesja nie została znaleziona</h3>
+                <p style="opacity: 0.7; margin-top: 15px;" data-i18n="session-error-desc">
                     Link może być nieprawidłowy lub wygasły.<br>
                     Poproś sąsiada o nowy link.
                 </p>
@@ -409,7 +454,7 @@
             <div class="current-track">
                 <div class="connection-indicator"></div>
                 <div style="margin-bottom: 15px;">
-                    <strong>Teraz gra u sąsiada:</strong>
+                    <strong data-i18n="now-playing">Teraz gra u sąsiada:</strong>
                 </div>
                 <img id="track-image" class="track-image hidden" src="" alt="Album cover">
                 <div class="track-name" id="track-name">Ładowanie...</div>
@@ -418,34 +463,34 @@
             </div>
 
             <div class="volume-control">
-                <h3 style="margin-bottom: 20px;">🎛️ Kontrola Głośności</h3>
+                <h3 style="margin-bottom: 20px;" data-i18n="volume-control">🎛️ Kontrola Głośności</h3>
                 <div class="volume-display" id="volume-display">50%</div>
                 <input type="range" min="0" max="100" value="50" 
                        class="volume-slider" id="volume-slider">
                 <div class="volume-labels">
-                    <span>🔇 Cisza</span>
-                    <span>🔊 Głośno</span>
+                    <span data-i18n="volume-silent">🔇 Cisza</span>
+                    <span data-i18n="volume-loud">🔊 Głośno</span>
                 </div>
             </div>
 
             <div class="quick-actions">
                 <button class="btn" onclick="setVolume(0)">
-                    🤫 Wycisz
+                    <span data-i18n="btn-mute">🤫 Wycisz</span>
                 </button>
                 <button class="btn" onclick="setVolume(25)">
-                    🔉 Cicho
+                    <span data-i18n="btn-quiet">🔉 Cicho</span>
                 </button>
                 <button class="btn" onclick="setVolume(50)">
-                    🎵 Średnio
+                    <span data-i18n="btn-medium">🎵 Średnio</span>
                 </button>
                 <button class="btn primary" onclick="sendThankYou()">
-                    ❤️ Dzięki!
+                    <span data-i18n="btn-thanks">❤️ Dzięki!</span>
                 </button>
             </div>
 
             <div class="emoji-section">
-                <div class="emoji-title">💬 Wyślij Reakcję</div>
-                <div class="emoji-subtitle">
+                <div class="emoji-title" data-i18n="send-reaction">💬 Wyślij Reakcję</div>
+                <div class="emoji-subtitle" data-i18n="poetic-messages">
                     ✨ poetyckie wiadomości dla sąsiada ✨
                 </div>
                 <div class="emoji-picker">
@@ -461,7 +506,7 @@
             <div class="status-section">
                 <div id="status-text">
                     <span class="connection-indicator"></span>
-                    Połączono z systemem sąsiada • Wszystko działa prawidłowo
+                    <span data-i18n="connected-status">Połączono z systemem sąsiada • Wszystko działa prawidłowo</span>
                 </div>
             </div>
         </div>
@@ -473,58 +518,187 @@
             linkId: null,
             currentVolume: 50,
             socket: null,
-            neighborId: 'neighbor_' + Math.random().toString(36).substr(2, 9)
+            neighborId: 'neighbor_' + Math.random().toString(36).substr(2, 9),
+            currentLanguage: 'pl'
         };
 
-        // Poetic messages for each emoji
+        // Translations
+        const translations = {
+            pl: {
+                subtitle: "Sąsiedzka Kontrola Głośności",
+                connecting: "Łączenie z systemem...",
+                "connecting-desc": "Sprawdzamy połączenie z muzyką sąsiada",
+                "session-not-found": "Sesja nie została znaleziona",
+                "session-error-desc": "Link może być nieprawidłowy lub wygasły.<br>Poproś sąsiada o nowy link.",
+                "now-playing": "Teraz gra u sąsiada:",
+                "volume-control": "🎛️ Kontrola Głośności",
+                "volume-silent": "🔇 Cisza",
+                "volume-loud": "🔊 Głośno",
+                "btn-mute": "🤫 Wycisz",
+                "btn-quiet": "🔉 Cicho",
+                "btn-medium": "🎵 Średnio",
+                "btn-thanks": "❤️ Dzięki!",
+                "send-reaction": "💬 Wyślij Reakcję",
+                "poetic-messages": "✨ poetyckie cytaty dla sąsiada ✨",
+                "connected-status": "Połączono z systemem sąsiada • Wszystko działa prawidłowo"
+            },
+            en: {
+                subtitle: "Neighborly Volume Control",
+                connecting: "Connecting to system...",
+                "connecting-desc": "Checking connection to neighbor's music",
+                "session-not-found": "Session not found",
+                "session-error-desc": "Link may be invalid or expired.<br>Ask your neighbor for a new link.",
+                "now-playing": "Now playing at neighbor's:",
+                "volume-control": "🎛️ Volume Control",
+                "volume-silent": "🔇 Silent",
+                "volume-loud": "🔊 Loud",
+                "btn-mute": "🤫 Mute",
+                "btn-quiet": "🔉 Quiet",
+                "btn-medium": "🎵 Medium",
+                "btn-thanks": "❤️ Thanks!",
+                "send-reaction": "💬 Send Reaction",
+                "poetic-messages": "✨ artistic quotes for your neighbor ✨",
+                "connected-status": "Connected to neighbor's system • Everything works perfectly"
+            }
+        };
+
+        // Poetic messages for each emoji with authors
         const poeticMessages = {
-            '👍': [
-                "jak morze spokojne, gdy muzyka cichnie ☕",
-                "słodka cisza w serca rytmie 🌙",
-                "dzięki za ten miły gest, jak ranek łagodny ☀️",
-                "harmonia mieszka między nami 🕊️",
-                "twoja dobroć jak ciepła herbatka 🍃"
+            pl: {
+                '👍': [
+                    { text: "jak morze spokojne, gdy muzyka cichnie ☕", author: "~ inspirowane Wisławą Szymborską" },
+                    { text: "słodka cisza w serca rytmie 🌙", author: "~ w stylu Czesława Miłosza" },
+                    { text: "dziękuję za ten miły gest, jak ranek łagodny ☀️", author: "~ poezja sąsiedzka" },
+                    { text: "harmonia mieszka między nami 🕊️", author: "~ wspólnotowy zen" },
+                    { text: "twoja dobroć jak ciepła herbatka 🍃", author: "~ miejska poezja" }
+                ],
+                '🤫': [
+                    { text: "w ciszy gwiazdy śpiewają najpiękniej 👼", author: "~ Antoine de Saint-Exupéry style" },
+                    { text: "jak szept wiatru przez okno - dziękuję 🌿", author: "~ haiku sąsiedzkie" },
+                    { text: "cisza jest złotem, a ty masz złote serce ✨", author: "~ przysłowie odnowione" },
+                    { text: "w ciszy odnajduję spokój 💙", author: "~ mindfulness" },
+                    { text: "cichość jak delikatna poezja 📖", author: "~ Emily Dickinson vibe" }
+                ],
+                '❤️': [
+                    { text: "serce tańczy do melodii dobroci 💃", author: "~ Rumi style" },
+                    { text: "miłość mieszka w małych gestach ☕", author: "~ Mother Teresa wisdom" },
+                    { text: "jak słodka kawka o poranku - ciepło 🌅", author: "~ poetry of small things" },
+                    { text: "muzyka łączy, a ty łączysz nas jeszcze bardziej 🎵", author: "~ John Lennon spirit" },
+                    { text: "love is in the air, and in the volume control 💕", author: "~ Beatles meets tech" }
+                ],
+                '🎵': [
+                    { text: "muzyka to język duszy, kontrola - poezja serca 🎭", author: "~ Platon remix" },
+                    { text: "w rytmie serca i bitów - dziękuję 💗", author: "~ DJ Philosophy" },
+                    { text: "harmonie przeplatają się z harmonią sąsiedzką 🎼", author: "~ Bach style community" },
+                    { text: "każda nuta ma teraz swoje miejsce 🌺", author: "~ Tori Amos wisdom" },
+                    { text: "music is my religion, volume control is my prayer 🙏", author: "~ Jimi Hendrix vibe" }
+                ],
+                '😴': [
+                    { text: "sen przychodzi jak łagodna fala 🌊", author: "~ Virginia Woolf style" },
+                    { text: "w objęciach ciszy znajdę sny 🌙", author: "~ Pablo Neruda inspired" },
+                    { text: "morpheus czeka, a ty mu pomagasz ✨", author: "~ mitologia miejska" },
+                    { text: "noc będzie słodka jak poezja 📜", author: "~ Edgar Allan Poe mood" },
+                    { text: "spokój nocny wraca do domu 🏠", author: "~ Robert Frost spirit" }
+                ],
+                '🔥': [
+                    { text: "muzyka jak ogień w sercu, ale teraz w sam raz 🔥", author: "~ Johnny Cash energy" },
+                    { text: "energia kontrolowana to poezja w ruchu 💫", author: "~ Bruce Lee philosophy" },
+                    { text: "fire vibes z mądrością - idealne połączenie ⚡", author: "~ Hendrix meets Buddha" },
+                    { text: "płomień artysty, serce sąsiada 🎨", author: "~ Van Gogh community" },
+                    { text: "jak gwiazda - świeci, ale nie oślepia ⭐", author: "~ Carl Sagan poetry" }
+                ]
+            },
+            en: {
+                '👍': [
+                    { text: "like a calm ocean when music softly fades ☕", author: "~ inspired by Wisława Szymborska" },
+                    { text: "sweet silence in rhythm with the heart 🌙", author: "~ in style of Czesław Miłosz" },
+                    { text: "thank you for this gentle gesture, like morning's grace ☀️", author: "~ neighborly poetry" },
+                    { text: "harmony lives between us 🕊️", author: "~ community zen" },
+                    { text: "your kindness like warm herbal tea 🍃", author: "~ urban poetry" }
+                ],
+                '🤫': [
+                    { text: "in silence, stars sing most beautifully 👼", author: "~ Antoine de Saint-Exupéry style" },
+                    { text: "like wind's whisper through the window - thank you 🌿", author: "~ neighborly haiku" },
+                    { text: "silence is golden, and you have a golden heart ✨", author: "~ proverb renewed" },
+                    { text: "in quietness I find my peace 💙", author: "~ mindfulness" },
+                    { text: "stillness like gentle poetry 📖", author: "~ Emily Dickinson vibe" }
+                ],
+                '❤️': [
+                    { text: "heart dances to the melody of kindness 💃", author: "~ Rumi style" },
+                    { text: "love lives in small gestures ☕", author: "~ Mother Teresa wisdom" },
+                    { text: "like sweet morning coffee - warmth 🌅", author: "~ poetry of small things" },
+                    { text: "music connects, and you connect us even more 🎵", author: "~ John Lennon spirit" },
+                    { text: "love is in the air, and in the volume control 💕", author: "~ Beatles meets tech" }
+                ],
+                '🎵': [
+                    { text: "music is soul's language, control is heart's poetry 🎭", author: "~ Plato remix" },
+                    { text: "in rhythm of heart and beats - thank you 💗", author: "~ DJ Philosophy" },
+                    { text: "harmonies interweave with neighborly harmony 🎼", author: "~ Bach style community" },
+                    { text: "every note now has its perfect place 🌺", author: "~ Tori Amos wisdom" },
+                    { text: "music is my religion, volume control is my prayer 🙏", author: "~ Jimi Hendrix vibe" }
+                ],
+                '😴': [
+                    { text: "sleep comes like a gentle wave 🌊", author: "~ Virginia Woolf style" },
+                    { text: "in silence's embrace I'll find my dreams 🌙", author: "~ Pablo Neruda inspired" },
+                    { text: "morpheus waits, and you help him arrive ✨", author: "~ urban mythology" },
+                    { text: "night will be sweet as poetry 📜", author: "~ Edgar Allan Poe mood" },
+                    { text: "peaceful night returns home 🏠", author: "~ Robert Frost spirit" }
+                ],
+                '🔥': [
+                    { text: "music like fire in the heart, but now just right 🔥", author: "~ Johnny Cash energy" },
+                    { text: "controlled energy is poetry in motion 💫", author: "~ Bruce Lee philosophy" },
+                    { text: "fire vibes with wisdom - perfect combination ⚡", author: "~ Hendrix meets Buddha" },
+                    { text: "artist's flame, neighbor's heart 🎨", author: "~ Van Gogh community" },
+                    { text: "like a star - shines but doesn't blind ⭐", author: "~ Carl Sagan poetry" }
+                ]
+            }
+        };
+
+        // Thank you messages with authors
+        const thankYouMessages = {
+            pl: [
+                { text: "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕", author: "~ ocean philosophy" },
+                { text: "słodka harmonia między nami jak kawka o poranku ☀️", author: "~ morning ritual poetry" },
+                { text: "w rytmie serca i muzyki - dziękuję za cierpliwość 💙", author: "~ grateful heart beats" },
+                { text: "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵", author: "~ community symphony" },
+                { text: "miłość sąsiedzka piękniejsza niż każda ballada 💕", author: "~ neighborhood love songs" }
             ],
-            '🤫': [
-                "cisza jest złotem, a ty anioł dobrego sąsiedztwa 👼",
-                "jak szept wiatru przez okno - dziękuję 🌿",
-                "nocny spokój wraca do nas ✨",
-                "w ciszy odnajduję serce 💙",
-                "cichość jak delikatna poezja 📖"
-            ],
-            '❤️': [
-                "serce tańczy do melodii dobroci 💃",
-                "miłość mieszka w małych gestach ☕",
-                "jak słodka kawka o poranku - ciepło 🌅",
-                "muzyka łączy, a ty łączysz nas jeszcze bardziej 🎵",
-                "love is in the air, and in the volume control 💕"
-            ],
-            '🎵': [
-                "melodie płyną jak rzeka, ty ich kapitanem 🚢",
-                "muzyka jest językiem duszy, kontrola - poezją 🎭",
-                "w rytmie serca i bitów - dziękuję 💗",
-                "harmonie przeplatają się z harmonią sąsiedzką 🎼",
-                "każda nuta ma teraz swoje miejsce 🌺"
-            ],
-            '😴': [
-                "sen przychodzi jak łagodna fala 🌊",
-                "w objęciach ciszy znajdę sny 🌙",
-                "morpheus czeka, a ty mu pomagasz ✨",
-                "noc będzie słodka jak poezja 📜",
-                "spokój nocny wraca do domu 🏠"
-            ],
-            '🔥': [
-                "ta muzyka jak ogień w sercu, ale teraz w sam raz 🔥",
-                "energia kontrolowana to poezja w ruchu 💫",
-                "fire vibes z mądrością - idealne połączenie ⚡",
-                "płomień artysty, serce sąsiada 🎨",
-                "jak gwiazda - świeci, ale nie oślepia ⭐"
+            en: [
+                { text: "like ocean calms the waves, so you calm my speakers 🌊 ☕", author: "~ ocean philosophy" },
+                { text: "sweet harmony between us like morning coffee ☀️", author: "~ morning ritual poetry" },
+                { text: "in rhythm of heart and music - thank you for patience 💙", author: "~ grateful heart beats" },
+                { text: "poetry is you, melody is me, together we create symphony 🎵", author: "~ community symphony" },
+                { text: "neighborly love more beautiful than any ballad 💕", author: "~ neighborhood love songs" }
             ]
         };
+
+        // Set language
+        function setLanguage(lang) {
+            appState.currentLanguage = lang;
+            localStorage.setItem('neighborly_language', lang);
+            
+            // Update UI
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`lang-${lang}`).classList.add('active');
+            
+            // Update all translatable elements
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    element.innerHTML = translations[lang][key];
+                }
+            });
+            
+            showNotification(lang === 'pl' ? '🇵🇱 Język zmieniony na polski' : '🇺🇸 Language changed to English', 'success');
+        }
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎵 NeighborlyVolume Neighbor Control starting...');
+            
+            // Restore language preference
+            const savedLang = localStorage.getItem('neighborly_language') || 'pl';
+            setLanguage(savedLang);
             
             // Get linkId from URL
             const pathParts = window.location.pathname.split('/');
@@ -575,7 +749,12 @@
                 document.getElementById('loading-section').classList.add('hidden');
                 document.getElementById('control-section').classList.remove('hidden');
                 
-                showNotification('🎵 Połączono z muzyką sąsiada!', 'success');
+                showNotification(
+                    appState.currentLanguage === 'pl' 
+                        ? '🎵 Połączono z muzyką sąsiada!' 
+                        : '🎵 Connected to neighbor\'s music!', 
+                    'success'
+                );
                 
                 // Start periodic updates
                 startStatusUpdates();
@@ -605,7 +784,8 @@
                     img.classList.remove('hidden');
                 }
             } else {
-                document.getElementById('track-name').textContent = 'Brak aktywnej muzyki';
+                const noMusicText = appState.currentLanguage === 'pl' ? 'Brak aktywnej muzyki' : 'No active music';
+                document.getElementById('track-name').textContent = noMusicText;
                 document.getElementById('track-artist').textContent = '';
                 document.getElementById('track-album').textContent = '';
             }
@@ -627,46 +807,56 @@
 
         // Control volume
         async function controlVolume(volume) {
-    console.log('🔊 CONTROLLING VOLUME:', volume);
-    
-    try {
-        const requestBody = {
-            volume: volume,
-            neighborId: appState.neighborId,
-            action: 'volume_change'
-        };
-        
-        console.log('📤 VOLUME REQUEST:', requestBody);
-        
-        const response = await fetch(`/api/control/${appState.linkId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
+            console.log('🔊 CONTROLLING VOLUME:', volume);
+            
+            try {
+                const requestBody = {
+                    volume: volume,
+                    neighborId: appState.neighborId,
+                    action: 'volume_change'
+                };
+                
+                console.log('📤 VOLUME REQUEST:', requestBody);
+                
+                const response = await fetch(`/api/control/${appState.linkId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
 
-        console.log('📥 VOLUME RESPONSE STATUS:', response.status);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ VOLUME RESPONSE ERROR:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+                console.log('📥 VOLUME RESPONSE STATUS:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ VOLUME RESPONSE ERROR:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ VOLUME RESPONSE DATA:', data);
+                
+                if (data.success) {
+                    const message = appState.currentLanguage === 'pl' 
+                        ? `🔊 Głośność zmieniona na ${volume}%`
+                        : `🔊 Volume changed to ${volume}%`;
+                    updateStatusText(message);
+                    
+                    const notification = appState.currentLanguage === 'pl'
+                        ? `🔊 Ustawiono ${volume}%`
+                        : `🔊 Set to ${volume}%`;
+                    showNotification(notification, 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to control volume');
+                }
+                
+            } catch (error) {
+                console.error('❌ VOLUME CONTROL ERROR:', error);
+                const errorMsg = appState.currentLanguage === 'pl'
+                    ? `❌ Błąd: ${error.message}`
+                    : `❌ Error: ${error.message}`;
+                showNotification(errorMsg, 'error');
+            }
         }
-        
-        const data = await response.json();
-        console.log('✅ VOLUME RESPONSE DATA:', data);
-        
-        if (data.success) {
-            updateStatusText(`🔊 Głośność zmieniona na ${volume}%`);
-            showNotification(`🔊 Ustawiono ${volume}%`, 'success');
-        } else {
-            throw new Error(data.error || 'Failed to control volume');
-        }
-        
-    } catch (error) {
-        console.error('❌ VOLUME CONTROL ERROR:', error);
-        showNotification(`❌ Błąd: ${error.message}`, 'error');
-    }
-}
 
         // Set specific volume
         function setVolume(volume) {
@@ -676,117 +866,134 @@
 
         // Send emoji with poetic message
         async function sendEmoji(emoji, fallbackMessage) {
-    console.log('🎭 SENDING EMOJI:', { emoji, fallbackMessage });
-    
-    try {
-        // Get random poetic message
-        const messages = poeticMessages[emoji] || [fallbackMessage];
-        const poeticMessage = messages[Math.floor(Math.random() * messages.length)];
-        
-        console.log('📝 SELECTED MESSAGE:', poeticMessage);
-        
-        const requestBody = {
-            neighborId: appState.neighborId,
-            action: 'emoji_message',
-            message: poeticMessage
-        };
-        
-        console.log('📤 SENDING REQUEST:', requestBody);
-        
-        const response = await fetch(`/api/control/${appState.linkId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-
-        console.log('📥 RESPONSE STATUS:', response.status);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ RESPONSE ERROR:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        console.log('✅ RESPONSE DATA:', data);
-        
-        if (data.success) {
-            updateStatusText(`${emoji} Wysłano: "${poeticMessage}"`);
-            showNotification(`${emoji} Wiadomość wysłana!`, 'success');
+            console.log('🎭 SENDING EMOJI:', { emoji, fallbackMessage });
             
-            // Find and animate the clicked button
-            const clickedButton = document.querySelector('.emoji-btn:hover, .emoji-btn:focus, .emoji-btn:active');
-            if (clickedButton) {
-                animateButton(clickedButton);
+            try {
+                // Get random poetic message in current language
+                const messages = poeticMessages[appState.currentLanguage][emoji] || [{ text: fallbackMessage, author: '' }];
+                const selected = messages[Math.floor(Math.random() * messages.length)];
+                const poeticMessage = selected.text;
+                const author = selected.author;
+                
+                console.log('📝 SELECTED MESSAGE:', { poeticMessage, author });
+                
+                const requestBody = {
+                    neighborId: appState.neighborId,
+                    action: 'emoji_message',
+                    message: poeticMessage,
+                    author: author
+                };
+                
+                console.log('📤 SENDING REQUEST:', requestBody);
+                
+                const response = await fetch(`/api/control/${appState.linkId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('📥 RESPONSE STATUS:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ RESPONSE ERROR:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ RESPONSE DATA:', data);
+                
+                if (data.success) {
+                    const statusText = `${emoji} ${appState.currentLanguage === 'pl' ? 'Wysłano' : 'Sent'}: "${poeticMessage}"`;
+                    updateStatusText(statusText);
+                    
+                    const notificationText = appState.currentLanguage === 'pl' 
+                        ? `${emoji} Wiadomość wysłana!`
+                        : `${emoji} Message sent!`;
+                    showNotification(notificationText, 'success');
+                    
+                    // Find and animate the clicked button
+                    const clickedButton = document.querySelector('.emoji-btn:hover, .emoji-btn:focus, .emoji-btn:active');
+                    if (clickedButton) {
+                        animateButton(clickedButton);
+                    }
+                } else {
+                    throw new Error(data.error || 'Failed to send message');
+                }
+                
+            } catch (error) {
+                console.error('❌ SEND EMOJI ERROR:', error);
+                const errorMsg = appState.currentLanguage === 'pl'
+                    ? `❌ Błąd: ${error.message}`
+                    : `❌ Error: ${error.message}`;
+                showNotification(errorMsg, 'error');
             }
-        } else {
-            throw new Error(data.error || 'Failed to send message');
         }
-        
-    } catch (error) {
-        console.error('❌ SEND EMOJI ERROR:', error);
-        showNotification(`❌ Błąd: ${error.message}`, 'error');
-    }
-}
-        // Send thank you message
+
+        // Send thank you message  
         async function sendThankYou() {
-    console.log('❤️ SENDING THANK YOU');
-    
-    const thankYouMessages = [
-        "jak morze uspokaja fale, tak ty moje głośniki 🌊 ☕",
-        "słodka harmonia między nami jak kawka o poranku ☀️",
-        "w rytmie serca i muzyki - dziękuję za cierpliwość 💙",
-        "poezja to ty, melodia to ja, razem tworzymy symfonię 🎵",
-        "miłość sąsiedzka piękniejsza niż każda ballada 💕"
-    ];
-    
-    const randomMessage = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
-    console.log('💕 SELECTED THANK YOU:', randomMessage);
-    
-    try {
-        const requestBody = {
-            neighborId: appState.neighborId,
-            action: 'thank_you',
-            message: randomMessage
-        };
-        
-        console.log('📤 SENDING THANK YOU REQUEST:', requestBody);
-        
-        const response = await fetch(`/api/control/${appState.linkId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-
-        console.log('📥 THANK YOU RESPONSE STATUS:', response.status);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ THANK YOU RESPONSE ERROR:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        console.log('✅ THANK YOU RESPONSE DATA:', data);
-        
-        if (data.success) {
-            updateStatusText(`❤️ Podziękowanie: "${randomMessage}"`);
-            showNotification('❤️ Poetyckie dzięki wysłane!', 'success');
+            console.log('❤️ SENDING THANK YOU');
             
-            // Find and animate the thank you button
-            const thankYouButton = document.querySelector('.btn.primary');
-            if (thankYouButton) {
-                animateButton(thankYouButton);
+            const messages = thankYouMessages[appState.currentLanguage];
+            const selected = messages[Math.floor(Math.random() * messages.length)];
+            const randomMessage = selected.text;
+            const author = selected.author;
+            
+            console.log('💕 SELECTED THANK YOU:', { randomMessage, author });
+            
+            try {
+                const requestBody = {
+                    neighborId: appState.neighborId,
+                    action: 'thank_you',
+                    message: randomMessage,
+                    author: author
+                };
+                
+                console.log('📤 SENDING THANK YOU REQUEST:', requestBody);
+                
+                const response = await fetch(`/api/control/${appState.linkId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('📥 THANK YOU RESPONSE STATUS:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ THANK YOU RESPONSE ERROR:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ THANK YOU RESPONSE DATA:', data);
+                
+                if (data.success) {
+                    const statusText = `❤️ ${appState.currentLanguage === 'pl' ? 'Podziękowanie' : 'Thank you'}: "${randomMessage}"`;
+                    updateStatusText(statusText);
+                    
+                    const notificationText = appState.currentLanguage === 'pl'
+                        ? '❤️ Poetyckie dzięki wysłane!'
+                        : '❤️ Poetic thanks sent!';
+                    showNotification(notificationText, 'success');
+                    
+                    // Find and animate the thank you button
+                    const thankYouButton = document.querySelector('.btn.primary');
+                    if (thankYouButton) {
+                        animateButton(thankYouButton);
+                    }
+                } else {
+                    throw new Error(data.error || 'Failed to send thank you');
+                }
+                
+            } catch (error) {
+                console.error('❌ SEND THANK YOU ERROR:', error);
+                const errorMsg = appState.currentLanguage === 'pl'
+                    ? `❌ Błąd: ${error.message}`
+                    : `❌ Error: ${error.message}`;
+                showNotification(errorMsg, 'error');
             }
-        } else {
-            throw new Error(data.error || 'Failed to send thank you');
         }
-        
-    } catch (error) {
-        console.error('❌ SEND THANK YOU ERROR:', error);
-        showNotification(`❌ Błąd: ${error.message}`, 'error');
-    }
-}
 
         // Animate button
         function animateButton(button) {
@@ -805,8 +1012,11 @@
                 `<span class="connection-indicator"></span>${message}`;
             
             setTimeout(() => {
+                const defaultText = appState.currentLanguage === 'pl'
+                    ? 'Połączono z systemem sąsiada • Wszystko działa prawidłowo'
+                    : 'Connected to neighbor\'s system • Everything works perfectly';
                 document.getElementById('status-text').innerHTML = 
-                    '<span class="connection-indicator"></span>Połączono z systemem sąsiada • Wszystko działa prawidłowo';
+                    `<span class="connection-indicator"></span>${defaultText}`;
             }, 5000);
         }
 
