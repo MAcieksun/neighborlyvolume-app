@@ -43,6 +43,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// LOGGING MIDDLEWARE - DODAJ TO
+app.use((req, res, next) => {
+    stats.totalVisits++;
+    console.log(`📊 ${new Date().toLocaleTimeString()} - ${req.method} ${req.path} - Total: ${stats.totalVisits}`);
+    next();
+});
+
 // ===== PRZECHOWYWANIE SESJI (TRWAŁE) =====
 const activeSessions = new Map();
 const userTokens = new Map();
