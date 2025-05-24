@@ -5,7 +5,6 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const http = require('http');
 const socketIo = require('socket.io');
-const fs = require('fs').promises;
 
 const app = express();
 const server = http.createServer(app);
@@ -18,237 +17,302 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// ADVANCED STATS TRACKING
-let stats = {
-    totalVisits: 0,
-    uniqueIPs: new Set(),
-    userSessions: new Set(),
-    volumeChanges: 0,
-    startTime: new Date(),
-    authAttempts: 0,
-    linksGenerated: 0,
-    neighborVisits: 0
-};
-
 // ===== KONFIGURACJA =====
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || 'TWÓJ_CLIENT_ID_TUTAJ';
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || 'TWÓJ_CLIENT_SECRET_TUTAJ';
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || 'ac709159a324498eae740127315437f7';
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '5aae8a1e2ae844c1921161c38f7e9d8f';
 const BASE_URL = process.env.BASE_URL || 'https://localhost:3000';
-
-console.log('🔧 STARTUP CONFIG:', {
-    PORT: PORT,
-    CLIENT_ID: SPOTIFY_CLIENT_ID ? `${SPOTIFY_CLIENT_ID.substring(0, 10)}...` : 'NOT SET',
-    CLIENT_SECRET: SPOTIFY_CLIENT_SECRET ? `${SPOTIFY_CLIENT_SECRET.substring(0, 10)}...` : 'NOT SET',
-    BASE_URL: BASE_URL
-});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// LOGGING MIDDLEWARE - DODAJ TO
-app.use((req, res, next) => {
-    stats.totalVisits++;
-    
-    // Track unique IPs
-    const userIP = req.ip || req.connection.remoteAddress || 'unknown';
-    stats.uniqueIPs.add(userIP);
-    
-    // Track different types of visits
-    if (req.path === '/auth/login') stats.authAttempts++;
-    if (req.path.startsWith('/control/')) stats.neighborVisits++;
-    
-    console.log(`📊 ${new Date().toLocaleTimeString()} - ${req.method} ${req.path} - Unique IPs: ${stats.uniqueIPs.size}`);
-    next();
-});
-
-// ===== PRZECHOWYWANIE SESJI (TRWAŁE) =====
+// ===== PRZECHOWYWANIE SESJI (TYMCZASOWE) =====
 const activeSessions = new Map();
 const userTokens = new Map();
 
-// Session file paths
-const SESSIONS_FILE = path.join(__dirname, 'data', 'sessions.json');
-const TOKENS_FILE = path.join(__dirname, 'data', 'tokens.json');
-
-// Ensure data directory exists
-async function ensureDataDirectory() {
-    try {
-        await fs.mkdir(path.join(__dirname, 'data'), { recursive: true });
-        console.log('📁 Data directory ready');
-    } catch (error) {
-        console.error('❌ Failed to create data directory:', error);
-    }
-}
-
-// Save sessions to file
-async function saveSessions() {
-    try {
-        const sessionsArray = Array.from(activeSessions.entries()).map(([id, session]) => {
-            // Don't save sensitive access tokens to disk
-            const sessionCopy = { ...session };
-            delete sessionCopy.accessToken;
-            return [id, sessionCopy];
-        });
+// ===== NOWE: RATE LIMITING CLASS =====
+class VolumeRateLimiter {
+    constructor() {
+        this.maxTokens = 5;      // max 5 zmian
+        this.refillRate = 60000; // na minutę (60 sekund)
+        this.users = new Map();
         
-        await fs.writeFile(SESSIONS_FILE, JSON.stringify(sessionsArray, null, 2));
-        console.log('💾 Sessions saved to disk');
-    } catch (error) {
-        console.error('❌ Failed to save sessions:', error);
+        console.log('🛡️ Rate Limiter initialized: 5 changes per minute');
     }
-}
-
-// Load sessions from file
-async function loadSessions() {
-    try {
-        const data = await fs.readFile(SESSIONS_FILE, 'utf8');
-        const sessionsArray = JSON.parse(data);
-        
-        for (const [id, session] of sessionsArray) {
-            // Convert date strings back to Date objects
-            session.createdAt = new Date(session.createdAt);
-            if (session.expiresAt) session.expiresAt = new Date(session.expiresAt);
-            session.neighbors = session.neighbors.map(n => ({
-                ...n,
-                timestamp: new Date(n.timestamp)
-            }));
-            
-            activeSessions.set(id, session);
-        }
-        
-        console.log(`💾 Loaded ${activeSessions.size} sessions from disk`);
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.error('❌ Failed to load sessions:', error);
-        } else {
-            console.log('📝 No existing sessions file found, starting fresh');
-        }
-    }
-}
-
-// Save user tokens to file
-async function saveTokens() {
-    try {
-        const tokensArray = Array.from(userTokens.entries());
-        await fs.writeFile(TOKENS_FILE, JSON.stringify(tokensArray, null, 2));
-        console.log('🔑 Tokens saved to disk');
-    } catch (error) {
-        console.error('❌ Failed to save tokens:', error);
-    }
-}
-
-// Load user tokens from file
-async function loadTokens() {
-    try {
-        const data = await fs.readFile(TOKENS_FILE, 'utf8');
-        const tokensArray = JSON.parse(data);
-        
-        for (const [userId, tokens] of tokensArray) {
-            userTokens.set(userId, tokens);
-        }
-        
-        console.log(`🔑 Loaded ${userTokens.size} user tokens from disk`);
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.error('❌ Failed to load tokens:', error);
-        } else {
-            console.log('🔑 No existing tokens file found, starting fresh');
-        }
-    }
-}
-
-// Refresh Spotify access token
-async function refreshSpotifyToken(refreshToken) {
-    console.log('🔄 Refreshing Spotify token...');
     
-    try {
-        const response = await axios.post('https://accounts.spotify.com/api/token', 
-            new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: refreshToken,
-                client_id: SPOTIFY_CLIENT_ID,
-                client_secret: SPOTIFY_CLIENT_SECRET
-            }),
-            {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        
-        console.log('✅ Token refreshed successfully');
-        return {
-            access_token: response.data.access_token,
-            refresh_token: response.data.refresh_token || refreshToken
+    canAdjustVolume(userId) {
+        const now = Date.now();
+        let userLimit = this.users.get(userId) || {
+            tokens: this.maxTokens,
+            lastRefill: now
         };
         
-    } catch (error) {
-        console.error('❌ Token refresh failed:', error.response?.data || error.message);
-        throw error;
+        // Oblicz ile tokenów dodać na podstawie czasu
+        const timePassed = now - userLimit.lastRefill;
+        const tokensToAdd = Math.floor(timePassed / (this.refillRate / this.maxTokens));
+        
+        if (tokensToAdd > 0) {
+            userLimit.tokens = Math.min(this.maxTokens, userLimit.tokens + tokensToAdd);
+            userLimit.lastRefill = now;
+            console.log(`🔄 User ${userId} refilled ${tokensToAdd} tokens, now has ${userLimit.tokens}`);
+        }
+        
+        // Sprawdź czy użytkownik ma tokeny
+        if (userLimit.tokens > 0) {
+            userLimit.tokens--;
+            this.users.set(userId, userLimit);
+            console.log(`✅ User ${userId} used token, ${userLimit.tokens} remaining`);
+            return true;
+        }
+        
+        this.users.set(userId, userLimit);
+        console.log(`❌ User ${userId} rate limited, no tokens available`);
+        return false;
+    }
+    
+    getTimeUntilRefill(userId) {
+        const userLimit = this.users.get(userId);
+        if (!userLimit) return 0;
+        
+        const timeSinceLastRefill = Date.now() - userLimit.lastRefill;
+        const timeUntilNextToken = (this.refillRate / this.maxTokens) - (timeSinceLastRefill % (this.refillRate / this.maxTokens));
+        
+        return Math.ceil(timeUntilNextToken / 1000); // w sekundach
+    }
+    
+    getRemainingTokens(userId) {
+        const userLimit = this.users.get(userId);
+        return userLimit ? userLimit.tokens : this.maxTokens;
     }
 }
 
-// Get valid access token for user
-async function getValidAccessToken(userId) {
-    const userToken = userTokens.get(userId);
-    if (!userToken) {
-        throw new Error('User not found');
+// ===== NOWE: CONFLICT RESOLVER CLASS =====
+class ConflictResolver {
+    constructor() {
+        this.pendingChanges = new Map();
+        this.debounceTime = 300; // 300ms
+        this.recentChanges = new Map(); // Track recent changes for conflict detection
+        this.conflictWindow = 5000; // 5 seconds window for conflict detection
+        
+        console.log('🎛️ Conflict Resolver initialized: 300ms debounce, 5s conflict window');
     }
     
-    // Try current token first
-    try {
-        const testResponse = await axios.get('https://api.spotify.com/v1/me', {
-            headers: { 'Authorization': `Bearer ${userToken.access_token}` }
+    handleVolumeChange(linkId, userId, volume) {
+        const session = activeSessions.get(linkId);
+        if (!session) {
+            console.log(`❌ Session ${linkId} not found`);
+            return false;
+        }
+        
+        console.log(`🎚️ Volume change request: ${userId} → ${volume}% in session ${linkId}`);
+        
+        // Zapisz zmianę do historii
+        this.recordVolumeChange(linkId, userId, volume);
+        
+        // Anuluj poprzednie oczekujące zmiany dla tej sesji
+        if (this.pendingChanges.has(linkId)) {
+            clearTimeout(this.pendingChanges.get(linkId).timeout);
+            console.log(`🔄 Cancelled previous pending change for session ${linkId}`);
+        }
+        
+        // Sprawdź czy występuje konflikt
+        const conflictUsers = this.detectConflict(linkId);
+        let finalVolume = volume;
+        let isConflictResolution = false;
+        
+        if (conflictUsers.length >= 2) {
+            // Smart averaging - uśrednij wartości z ostatnich 5 sekund
+            finalVolume = this.smartAverage(linkId);
+            isConflictResolution = true;
+            
+            console.log(`⚠️ Conflict detected in session ${linkId}: ${conflictUsers.length} users, averaging to ${finalVolume}%`);
+            
+            // Powiadom o konflikcie
+            io.emit(`session_${linkId}`, {
+                type: 'conflict_detected',
+                conflictingUsers: conflictUsers,
+                originalVolume: volume,
+                averagedVolume: finalVolume,
+                message: `⚠️ Konflikt wykryty! Uśrednianie ${conflictUsers.length} zmian...`,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Ustaw opóźnioną zmianę (debouncing)
+        const changeData = {
+            userId,
+            volume: finalVolume,
+            originalVolume: volume,
+            timestamp: Date.now(),
+            isConflictResolution,
+            timeout: setTimeout(() => {
+                this.applyVolumeChange(linkId, userId, finalVolume);
+                this.pendingChanges.delete(linkId);
+            }, this.debounceTime)
+        };
+        
+        this.pendingChanges.set(linkId, changeData);
+        
+        console.log(`⏳ Scheduled volume change to ${finalVolume}% in ${this.debounceTime}ms`);
+        
+        // Powiadom o oczekującej zmianie
+        io.emit(`session_${linkId}`, {
+            type: 'volume_pending',
+            userId: userId,
+            volume: finalVolume,
+            originalVolume: volume,
+            willApplyIn: this.debounceTime,
+            isConflictResolution,
+            timestamp: Date.now()
         });
         
-        console.log('✅ Current token is valid');
-        return userToken.access_token;
-        
-    } catch (error) {
-        if (error.response?.status === 401 && userToken.refresh_token) {
-            console.log('🔄 Token expired, refreshing...');
-            
-            try {
-                const newTokens = await refreshSpotifyToken(userToken.refresh_token);
-                
-                // Update stored tokens
-                userTokens.set(userId, newTokens);
-                await saveTokens();
-                
-                console.log('✅ Token refreshed and updated');
-                return newTokens.access_token;
-                
-            } catch (refreshError) {
-                console.error('❌ Token refresh failed:', refreshError);
-                throw new Error('Token refresh failed');
-            }
-        } else {
-            throw error;
+        return true;
+    }
+    
+    recordVolumeChange(linkId, userId, volume) {
+        if (!this.recentChanges.has(linkId)) {
+            this.recentChanges.set(linkId, []);
         }
+        
+        const changes = this.recentChanges.get(linkId);
+        changes.push({
+            userId,
+            volume,
+            timestamp: Date.now()
+        });
+        
+        // Zachowaj tylko zmiany z ostatnich 10 sekund
+        const cutoff = Date.now() - 10000;
+        const filteredChanges = changes.filter(change => change.timestamp > cutoff);
+        this.recentChanges.set(linkId, filteredChanges);
+        
+        console.log(`📝 Recorded change for ${userId}: ${volume}%, total recent changes: ${filteredChanges.length}`);
+    }
+    
+    detectConflict(linkId) {
+        const changes = this.recentChanges.get(linkId) || [];
+        const recentCutoff = Date.now() - this.conflictWindow;
+        
+        const recentChanges = changes.filter(change => change.timestamp > recentCutoff);
+        const uniqueUsers = [...new Set(recentChanges.map(change => change.userId))];
+        
+        if (uniqueUsers.length >= 2) {
+            console.log(`🔍 Conflict detected: ${uniqueUsers.length} users in last ${this.conflictWindow/1000}s`);
+        }
+        
+        return uniqueUsers;
+    }
+    
+    smartAverage(linkId) {
+        const changes = this.recentChanges.get(linkId) || [];
+        const recentCutoff = Date.now() - this.conflictWindow;
+        
+        const recentChanges = changes.filter(change => change.timestamp > recentCutoff);
+        
+        if (recentChanges.length === 0) {
+            console.log('📊 No recent changes for averaging, defaulting to 50%');
+            return 50;
+        }
+        
+        // Wyważona średnia - nowsze zmiany mają większą wagę
+        let totalWeight = 0;
+        let weightedSum = 0;
+        const now = Date.now();
+        
+        recentChanges.forEach(change => {
+            const age = now - change.timestamp;
+            const weight = Math.max(1, this.conflictWindow - age); // Nowsze = większa waga
+            
+            weightedSum += change.volume * weight;
+            totalWeight += weight;
+            
+            console.log(`📊 Change: ${change.volume}%, age: ${age}ms, weight: ${weight}`);
+        });
+        
+        const average = Math.round(weightedSum / totalWeight);
+        console.log(`📊 Smart average calculated: ${average}% from ${recentChanges.length} changes`);
+        
+        return average;
+    }
+    
+    async applyVolumeChange(linkId, userId, volume) {
+        const session = activeSessions.get(linkId);
+        if (!session) {
+            console.log(`❌ Cannot apply volume change: session ${linkId} not found`);
+            return;
+        }
+        
+        try {
+            console.log(`🎵 Applying volume change: ${volume}% to Spotify`);
+            
+            // Zastosuj zmianę w Spotify
+            await axios.put(
+                `https://api.spotify.com/v1/me/player/volume?volume_percent=${volume}`,
+                {},
+                { headers: { 'Authorization': `Bearer ${session.accessToken}` }}
+            );
+            
+            session.volume = volume;
+            session.lastController = userId;
+            session.lastVolumeChange = Date.now();
+            
+            console.log(`✅ Volume successfully changed to ${volume}% by ${userId}`);
+            
+            // Powiadom o zastosowanej zmianie
+            io.emit(`session_${linkId}`, {
+                type: 'volume_applied',
+                userId: userId,
+                volume: volume,
+                appliedAt: Date.now()
+            });
+            
+        } catch (error) {
+            console.error(`❌ Volume change error for session ${linkId}:`, error.response?.data || error.message);
+            
+            // Powiadom o błędzie
+            io.emit(`session_${linkId}`, {
+                type: 'volume_error',
+                userId: userId,
+                error: 'Failed to change volume',
+                message: 'Błąd zmiany głośności - sprawdź połączenie Spotify',
+                originalVolume: volume
+            });
+        }
+    }
+    
+    getCurrentController(linkId) {
+        const pending = this.pendingChanges.get(linkId);
+        if (pending) {
+            return pending.userId;
+        }
+        
+        const session = activeSessions.get(linkId);
+        return session ? session.lastController : null;
+    }
+    
+    getConflictStats(linkId) {
+        const changes = this.recentChanges.get(linkId) || [];
+        const recentCutoff = Date.now() - this.conflictWindow;
+        const recentChanges = changes.filter(change => change.timestamp > recentCutoff);
+        
+        return {
+            totalChanges: changes.length,
+            recentChanges: recentChanges.length,
+            uniqueUsers: [...new Set(recentChanges.map(c => c.userId))].length,
+            hasConflict: [...new Set(recentChanges.map(c => c.userId))].length >= 2
+        };
     }
 }
 
-// Initialize storage on startup
-async function initializeStorage() {
-    await ensureDataDirectory();
-    await loadSessions();
-    await loadTokens();
-    
-    // Restore access tokens for active sessions
-    for (const [sessionId, session] of activeSessions.entries()) {
-        try {
-            const validToken = await getValidAccessToken(session.userId);
-            session.accessToken = validToken;
-            console.log(`✅ Restored session ${sessionId} with fresh token`);
-        } catch (error) {
-            console.log(`❌ Failed to restore session ${sessionId}:`, error.message);
-            session.needsReauth = true;
-        }
-    }
-    
-    console.log(`🚀 Storage initialized: ${activeSessions.size} sessions, ${userTokens.size} users`);
-}
+// ===== INICJALIZACJA SYSTEMÓW =====
+const rateLimiter = new VolumeRateLimiter();
+const conflictResolver = new ConflictResolver();
 
 // ===== SPOTIFY AUTH =====
 app.get('/auth/login', (req, res) => {
+    console.log('🔐 Spotify login request received');
+    
     const scopes = [
         'user-modify-playback-state',
         'user-read-playback-state',
@@ -263,52 +327,37 @@ app.get('/auth/login', (req, res) => {
         `scope=${encodeURIComponent(scopes.join(' '))}&` +
         `show_dialog=true`;
         
-    console.log('🔗 SPOTIFY AUTH URL:', authURL);
+    console.log('🔗 Redirecting to Spotify auth URL');
     res.redirect(authURL);
 });
 
 app.get('/auth/callback', async (req, res) => {
     const { code, error } = req.query;
     
-    console.log('🔄 AUTH CALLBACK RECEIVED:', { 
-        code: code ? `${code.substring(0, 20)}...` : 'NO CODE',
-        error: error
-    });
-    
     if (error) {
-        console.log('❌ SPOTIFY AUTH ERROR:', error);
+        console.log(`❌ Spotify auth error: ${error}`);
         return res.redirect('/?error=access_denied');
     }
     
-    if (!code) {
-        console.log('❌ NO AUTH CODE RECEIVED');
-        return res.redirect('/?error=no_code');
-    }
-    
-    console.log('🔑 ATTEMPTING TOKEN EXCHANGE...');
-    
     try {
-        const tokenRequestBody = {
-            grant_type: 'authorization_code',
-            code: code,
-            redirect_uri: BASE_URL + '/auth/callback',
-            client_id: SPOTIFY_CLIENT_ID,
-            client_secret: SPOTIFY_CLIENT_SECRET
-        };
+        console.log('🔄 Exchanging code for tokens...');
         
         const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', 
-            new URLSearchParams(tokenRequestBody),
+            new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: BASE_URL + '/auth/callback',
+                client_id: SPOTIFY_CLIENT_ID,
+                client_secret: SPOTIFY_CLIENT_SECRET
+            }),
             {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }
         );
         
-        console.log('✅ TOKEN RESPONSE SUCCESS');
-        
         const { access_token, refresh_token } = tokenResponse.data;
         
         // Pobierz info o użytkowniku
-        console.log('👤 GETTING USER INFO...');
         const userResponse = await axios.get('https://api.spotify.com/v1/me', {
             headers: { 'Authorization': `Bearer ${access_token}` }
         });
@@ -316,23 +365,15 @@ app.get('/auth/callback', async (req, res) => {
         const userId = userResponse.data.id;
         const userName = userResponse.data.display_name;
         
-        console.log('✅ USER INFO SUCCESS:', { userId, userName });
-        
-        // Store tokens with refresh capability
         userTokens.set(userId, { access_token, refresh_token });
-        await saveTokens();
         
-        console.log('🎵 REDIRECTING TO SUCCESS PAGE...');
+        console.log(`✅ User authenticated: ${userName} (${userId})`);
+        
         res.redirect(`/?connected=true&user=${encodeURIComponent(userName)}&userId=${userId}`);
         
     } catch (error) {
-        console.error('❌ AUTH CALLBACK ERROR:', {
-            message: error.message,
-            status: error.response?.status,
-            data: error.response?.data
-        });
-        
-        res.redirect(`/?error=auth_failed&details=${encodeURIComponent(error.message)}`);
+        console.error('❌ Auth error:', error.response?.data || error.message);
+        res.redirect('/?error=auth_failed');
     }
 });
 
@@ -340,42 +381,43 @@ app.get('/auth/callback', async (req, res) => {
 app.post('/api/create-link', async (req, res) => {
     const { userId } = req.body;
     
-    console.log('🔗 CREATE LINK REQUEST:', { userId });
+    console.log(`🔗 Creating share link for user: ${userId}`);
+    
+    const userToken = userTokens.get(userId);
+    if (!userToken) {
+        console.log(`❌ User ${userId} not authenticated`);
+        return res.status(401).json({ error: 'User not authenticated' });
+    }
     
     try {
-        // Get valid access token (this will refresh if needed)
-        const accessToken = await getValidAccessToken(userId);
-        
         // Sprawdź status odtwarzacza
         const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${userToken.access_token}` }
         });
         
         const linkId = uuidv4();
         const shareLink = `${BASE_URL}/control/${linkId}`;
         
-        const sessionData = {
+        activeSessions.set(linkId, {
             userId: userId,
-            accessToken: accessToken,
+            accessToken: userToken.access_token,
             createdAt: new Date(),
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
             neighbors: [],
             currentTrack: playerResponse.data?.item || null,
             isPlaying: playerResponse.data?.is_playing || false,
             volume: playerResponse.data?.device?.volume_percent || 50,
-            needsReauth: false
-        };
+            lastController: null,
+            lastVolumeChange: null,
+            controlHistory: []
+        });
         
-        activeSessions.set(linkId, sessionData);
-        await saveSessions();
+        console.log(`✅ Share link created: ${linkId} for user ${userId}`);
+        console.log(`🔗 Share URL: ${shareLink}`);
         
-        console.log('✅ SESSION CREATED WITH 7-DAY EXPIRY:', { linkId, userId, expiresAt: sessionData.expiresAt });
-        stats.linksGenerated++; // DODAJ TO
         res.json({ 
             success: true, 
             linkId, 
             shareLink,
-            expiresAt: sessionData.expiresAt,
             currentStatus: {
                 track: playerResponse.data?.item,
                 isPlaying: playerResponse.data?.is_playing,
@@ -384,159 +426,139 @@ app.post('/api/create-link', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ CREATE LINK ERROR:', error.message);
-        res.status(500).json({ error: 'Failed to create link', details: error.message });
+        console.error('❌ Create link error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to create link' });
     }
 });
 
-// ===== KONTROLA GŁOŚNOŚCI =====
+// ===== KONTROLA GŁOŚNOŚCI (ZAKTUALIZOWANA Z NOWYM SYSTEMEM) =====
 app.put('/api/control/:linkId', async (req, res) => {
     const { linkId } = req.params;
     const { volume, neighborId, action, message } = req.body;
     
-    console.log('🎛️ CONTROL REQUEST:', { 
-        linkId, 
-        volume, 
-        neighborId, 
-        action, 
-        message
-    });
+    console.log(`🎛️ Control request: ${action || 'volume'} from ${neighborId} in session ${linkId}`);
     
     const session = activeSessions.get(linkId);
     if (!session) {
-        console.log('❌ SESSION NOT FOUND FOR CONTROL:', linkId);
+        console.log(`❌ Session ${linkId} not found`);
         return res.status(404).json({ error: 'Session not found' });
     }
     
-    // Check if session expired
-    if (session.expiresAt && new Date() > session.expiresAt) {
-        console.log('⏰ SESSION EXPIRED:', linkId);
-        activeSessions.delete(linkId);
-        await saveSessions();
-        return res.status(410).json({ error: 'Session expired' });
-    }
-    
-    console.log('✅ SESSION FOUND FOR CONTROL:', { linkId, userId: session.userId });
-    
     try {
-        // Get fresh access token if needed
-        const accessToken = await getValidAccessToken(session.userId);
-        session.accessToken = accessToken;
-        session.needsReauth = false;
-        
-        // Handle volume control
         if (volume !== undefined) {
-            console.log('🔊 SETTING VOLUME:', volume);
+            console.log(`🔊 Volume control request: ${neighborId} wants ${volume}%`);
             
-            // Ustaw głośność w Spotify
-            await axios.put(
-                `https://api.spotify.com/v1/me/player/volume?volume_percent=${volume}`,
-                {},
-                { headers: { 'Authorization': `Bearer ${accessToken}` }}
-            );
+            // Sprawdź rate limiting
+            if (!rateLimiter.canAdjustVolume(neighborId)) {
+                const waitTime = rateLimiter.getTimeUntilRefill(neighborId);
+                const remainingTokens = rateLimiter.getRemainingTokens(neighborId);
+                
+                console.log(`⏰ Rate limit hit for ${neighborId}: wait ${waitTime}s`);
+                
+                return res.status(429).json({ 
+                    error: 'Rate limit exceeded',
+                    message: `Za dużo zmian! Poczekaj ${waitTime} sekund.`,
+                    retryAfter: waitTime,
+                    remainingTokens: remainingTokens
+                });
+            }
             
-            session.volume = volume;
-            stats.volumeChanges++; // DODAJ TO
-            console.log('✅ VOLUME SET SUCCESSFULLY:', volume);
+            // Użyj conflict resolver
+            const success = conflictResolver.handleVolumeChange(linkId, neighborId, volume);
+            
+            if (success) {
+                // Zapisz info o kontrolerze
+                session.lastController = neighborId;
+                session.controlHistory.push({
+                    userId: neighborId,
+                    volume: volume,
+                    timestamp: Date.now(),
+                    action: 'volume_change'
+                });
+                
+                // Ogranicz historię do 20 ostatnich zmian
+                if (session.controlHistory.length > 20) {
+                    session.controlHistory = session.controlHistory.slice(-20);
+                }
+                
+                // Powiadom o nowym kontrolerze
+                io.emit(`session_${linkId}`, {
+                    type: 'controller_changed',
+                    currentController: neighborId,
+                    volume: volume,
+                    timestamp: Date.now()
+                });
+                
+                console.log(`✅ Volume control accepted for ${neighborId}`);
+                
+                res.json({ 
+                    success: true, 
+                    status: 'pending',
+                    message: 'Volume change scheduled',
+                    willApplyIn: 300,
+                    conflictStats: conflictResolver.getConflictStats(linkId)
+                });
+            } else {
+                console.log(`❌ Volume control failed for ${neighborId}`);
+                res.status(500).json({ error: 'Failed to process volume change' });
+            }
+            return;
         }
         
-        // Create neighbor action
-        const neighborAction = {
-            neighborId: neighborId || 'Anonymous',
-            action: action || 'volume_change',
-            volume: volume,
-            message: message,
-            author: req.body.author || '',
-            timestamp: new Date()
-        };
-        
-        console.log('📝 CREATING NEIGHBOR ACTION:', neighborAction);
-        
-        // Add to session history
-        session.neighbors.push(neighborAction);
-        
-        // Save updated session
-        await saveSessions();
-        
-        // Send WebSocket update
-        const wsData = {
-            type: 'neighbor_action',
-            data: neighborAction,
-            session: {
-                volume: session.volume,
-                neighbors: session.neighbors.length
+        // Obsługa wiadomości (bez zmian)
+        if (message) {
+            console.log(`💬 Message from ${neighborId}: ${message}`);
+            
+            const neighborAction = {
+                neighborId: neighborId || 'Anonymous',
+                action: action || 'message',
+                message: message,
+                timestamp: new Date()
+            };
+            
+            session.neighbors.push(neighborAction);
+            
+            // Ogranicz historię wiadomości
+            if (session.neighbors.length > 50) {
+                session.neighbors = session.neighbors.slice(-50);
             }
-        };
-        
-        console.log('📡 SENDING WEBSOCKET UPDATE:', wsData);
-        io.emit(`session_${linkId}`, wsData);
-        io.emit('session_update', wsData);
-        
-        console.log('✅ CONTROL REQUEST SUCCESSFUL');
-        res.json({ 
-            success: true, 
-            volume: session.volume,
-            message: 'Action completed successfully'
-        });
+            
+            // Wyślij update przez WebSocket
+            io.emit(`session_${linkId}`, {
+                type: 'neighbor_action',
+                data: neighborAction,
+                session: {
+                    volume: session.volume,
+                    neighbors: session.neighbors.length
+                }
+            });
+            
+            console.log(`✅ Message sent from ${neighborId}`);
+            res.json({ success: true });
+        }
         
     } catch (error) {
-        console.error('❌ CONTROL ERROR:', {
-            error: error.message,
-            response: error.response?.data,
-            status: error.response?.status,
-            linkId,
-            action
-        });
-        
-        if (error.message === 'User not found' || error.message === 'Token refresh failed') {
-            session.needsReauth = true;
-            await saveSessions();
-            
-            return res.status(401).json({ 
-                error: 'Authentication expired',
-                needsReauth: true 
-            });
-        }
-        
-        res.status(500).json({ 
-            error: 'Failed to control volume',
-            details: error.message 
-        });
+        console.error('❌ Control error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to process request' });
     }
 });
 
-// ===== STATUS SESJI =====
+// ===== STATUS SESJI (ROZSZERZONY) =====
 app.get('/api/status/:linkId', async (req, res) => {
     const { linkId } = req.params;
-    
-    console.log('📊 STATUS REQUEST:', { linkId });
-    
     const session = activeSessions.get(linkId);
     
     if (!session) {
-        console.log('❌ SESSION NOT FOUND:', linkId);
+        console.log(`❌ Status request for non-existent session: ${linkId}`);
         return res.status(404).json({ error: 'Session not found' });
     }
     
-    // Check if session expired
-    if (session.expiresAt && new Date() > session.expiresAt) {
-        console.log('⏰ SESSION EXPIRED:', linkId);
-        activeSessions.delete(linkId);
-        await saveSessions();
-        return res.status(410).json({ error: 'Session expired' });
-    }
-    
-    console.log('✅ SESSION FOUND:', { linkId, userId: session.userId, expiresAt: session.expiresAt });
-    
     try {
-        // Get fresh access token if needed
-        const accessToken = await getValidAccessToken(session.userId);
-        session.accessToken = accessToken;
-        session.needsReauth = false;
+        console.log(`📊 Status request for session ${linkId}`);
         
         // Pobierz aktualny status z Spotify
         const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${session.accessToken}` }
         });
         
         const playerData = playerResponse.data;
@@ -548,13 +570,14 @@ app.get('/api/status/:linkId', async (req, res) => {
             session.volume = playerData.device?.volume_percent || session.volume;
         }
         
-        // Save updated session
-        await saveSessions();
+        const conflictStats = conflictResolver.getConflictStats(linkId);
+        const currentController = conflictResolver.getCurrentController(linkId);
+        
+        console.log(`📊 Session ${linkId} status: ${session.volume}% volume, controller: ${currentController}`);
         
         res.json({
             isPlaying: session.isPlaying,
             volume: session.volume,
-            expiresAt: session.expiresAt,
             track: session.currentTrack ? {
                 name: session.currentTrack.name,
                 artist: session.currentTrack.artists[0]?.name,
@@ -562,21 +585,23 @@ app.get('/api/status/:linkId', async (req, res) => {
                 image: session.currentTrack.album?.images[0]?.url
             } : null,
             neighbors: session.neighbors.length,
-            recentActions: session.neighbors.slice(-10)
+            recentActions: session.neighbors.slice(-10),
+            currentController: currentController,
+            controlHistory: session.controlHistory.slice(-5),
+            conflictStats: conflictStats,
+            sessionInfo: {
+                createdAt: session.createdAt,
+                lastVolumeChange: session.lastVolumeChange,
+                totalVolumeChanges: session.controlHistory.length
+            }
         });
         
     } catch (error) {
-        console.error('❌ STATUS ERROR:', error.message);
+        console.error('❌ Status error:', error.response?.data || error.message);
         
-        if (error.message === 'User not found' || error.message === 'Token refresh failed') {
-            session.needsReauth = true;
-            await saveSessions();
-            
-            return res.status(401).json({ 
-                error: 'Authentication expired',
-                needsReauth: true 
-            });
-        }
+        // Fallback response
+        const conflictStats = conflictResolver.getConflictStats(linkId);
+        const currentController = conflictResolver.getCurrentController(linkId);
         
         res.json({ 
             isPlaying: session.isPlaying || false, 
@@ -584,193 +609,163 @@ app.get('/api/status/:linkId', async (req, res) => {
             track: null,
             neighbors: session.neighbors.length || 0,
             recentActions: session.neighbors.slice(-10) || [],
-            expiresAt: session.expiresAt
+            currentController: currentController,
+            controlHistory: session.controlHistory.slice(-5) || [],
+            conflictStats: conflictStats,
+            sessionInfo: {
+                createdAt: session.createdAt,
+                lastVolumeChange: session.lastVolumeChange,
+                totalVolumeChanges: session.controlHistory.length
+            }
         });
     }
 });
 
-// ===== ZARZĄDZANIE SESJĄ =====
-
-// Check if session is still valid
-app.get('/api/session/check/:sessionId', async (req, res) => {
-    const { sessionId } = req.params;
+// ===== NOWE: DEBUG ENDPOINT =====
+app.get('/api/debug/:linkId', (req, res) => {
+    const { linkId } = req.params;
+    const session = activeSessions.get(linkId);
     
-    console.log('🔍 SESSION CHECK REQUEST:', { sessionId });
-    
-    const session = activeSessions.get(sessionId);
     if (!session) {
-        console.log('❌ SESSION NOT FOUND:', sessionId);
         return res.status(404).json({ error: 'Session not found' });
     }
     
-    // Check if session expired
-    if (session.expiresAt && new Date() > session.expiresAt) {
-        console.log('⏰ SESSION EXPIRED:', sessionId);
-        activeSessions.delete(sessionId);
-        await saveSessions();
-        return res.status(410).json({ error: 'Session expired' });
-    }
+    const conflictStats = conflictResolver.getConflictStats(linkId);
+    const pendingChange = conflictResolver.pendingChanges.get(linkId);
     
-    console.log('✅ SESSION FOUND:', { sessionId, userId: session.userId });
-    
-    try {
-        // Test if Spotify token is still valid
-        const accessToken = await getValidAccessToken(session.userId);
-        session.accessToken = accessToken;
-        session.needsReauth = false;
-        
-        console.log('✅ SPOTIFY TOKEN STILL VALID');
-        
-        res.json({ 
-            success: true, 
-            session: {
-                userId: session.userId,
-                sessionId: sessionId,
-                neighbors: session.neighbors.length,
-                volume: session.volume,
-                expiresAt: session.expiresAt
-            }
-        });
-        
-    } catch (error) {
-        console.log('❌ SPOTIFY TOKEN INVALID:', error.message);
-        
-        session.needsReauth = true;
-        await saveSessions();
-        
-        res.status(401).json({ 
-            error: 'Session token expired',
-            needsReauth: true 
-        });
-    }
-});
-
-// Check if user tokens are still valid (without active session)
-app.post('/api/user/check', async (req, res) => {
-    const { userId } = req.body;
-    
-    console.log('👤 USER CHECK REQUEST:', { userId });
-    
-    try {
-        const accessToken = await getValidAccessToken(userId);
-        
-        const userResponse = await axios.get('https://api.spotify.com/v1/me', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        
-        console.log('✅ USER TOKEN STILL VALID:', { userId, userName: userResponse.data.display_name });
-        
-        res.json({ 
-            success: true, 
-            user: {
-                userId: userId,
-                name: userResponse.data.display_name
-            }
-        });
-        
-    } catch (error) {
-        console.log('❌ USER TOKEN INVALID:', { userId, error: error.message });
-        
-        userTokens.delete(userId);
-        await saveTokens();
-        
-        res.status(401).json({ 
-            error: 'User token expired',
-            needsReauth: true 
-        });
-    }
+    res.json({
+        session: {
+            userId: session.userId,
+            createdAt: session.createdAt,
+            volume: session.volume,
+            lastController: session.lastController,
+            neighborsCount: session.neighbors.length,
+            controlHistoryCount: session.controlHistory.length
+        },
+        conflictResolver: {
+            pendingChange: pendingChange ? {
+                userId: pendingChange.userId,
+                volume: pendingChange.volume,
+                originalVolume: pendingChange.originalVolume,
+                isConflictResolution: pendingChange.isConflictResolution,
+                timeRemaining: pendingChange.timestamp + 300 - Date.now()
+            } : null,
+            conflictStats: conflictStats
+        },
+        rateLimiter: {
+            userLimits: Array.from(rateLimiter.users.entries()).map(([userId, limit]) => ({
+                userId,
+                tokens: limit.tokens,
+                lastRefill: new Date(limit.lastRefill).toISOString()
+            }))
+        }
+    });
 });
 
 // ===== STRONA KONTROLI SĄSIADA =====
 app.get('/control/:linkId', (req, res) => {
-    const { linkId } = req.params;
-    console.log('🎛️ CONTROL PAGE REQUEST:', { linkId });
+    console.log(`🎮 Control page request for session: ${req.params.linkId}`);
     res.sendFile(path.join(__dirname, 'public', 'neighbor.html'));
 });
 
 // ===== GŁÓWNA STRONA =====
-// STATS ENDPOINT - DODAJ TO
-app.get('/api/stats', (req, res) => {
-    res.json({
-        totalVisits: stats.totalVisits,
-        uniqueUsers: stats.uniqueIPs.size,
-        authAttempts: stats.authAttempts,
-        linksGenerated: stats.linksGenerated,
-        neighborVisits: stats.neighborVisits,
-        volumeChanges: stats.volumeChanges,
-        activeSessions: activeSessions.size,
-        uptime: Math.floor((Date.now() - stats.startTime) / 1000 / 60) + ' minutes',
-        conversionRate: stats.uniqueIPs.size > 0 ? (stats.authAttempts / stats.uniqueIPs.size * 100).toFixed(1) + '%' : '0%'
-    });
-});
 app.get('/', (req, res) => {
+    console.log('🏠 Main page request');
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ===== WEBSOCKET =====
 io.on('connection', (socket) => {
-    console.log('🔌 New client connected');
+    console.log('🔌 New WebSocket client connected');
     
     socket.on('join_session', (linkId) => {
-        console.log('🏠 Client joined session:', linkId);
         socket.join(`session_${linkId}`);
+        console.log(`👥 Client joined session: ${linkId}`);
+        
+        // Send current session state
+        const session = activeSessions.get(linkId);
+        if (session) {
+            const currentController = conflictResolver.getCurrentController(linkId);
+            socket.emit(`session_${linkId}`, {
+                type: 'session_joined',
+                currentController: currentController,
+                volume: session.volume,
+                timestamp: Date.now()
+            });
+        }
     });
     
     socket.on('disconnect', () => {
-        console.log('❌ Client disconnected');
+        console.log('❌ WebSocket client disconnected');
+    });
+    
+    socket.on('ping_session', (linkId) => {
+        // Health check for session
+        const session = activeSessions.get(linkId);
+        socket.emit('pong_session', {
+            linkId,
+            exists: !!session,
+            timestamp: Date.now()
+        });
     });
 });
 
 // ===== START SERWERA =====
-async function startServer() {
-    // Initialize persistent storage first
-    await initializeStorage();
-    
-    server.listen(PORT, () => {
-        console.log(`🎵 NeighborlyVolume server running on port ${PORT}`);
-        console.log(`🔗 Main app: ${BASE_URL}`);
-        console.log(`🎛️ Example control: ${BASE_URL}/control/demo123`);
-        console.log(`💾 Sessions persist for 7 days`);
-    });
-}
-
-// Start the server
-startServer().catch(error => {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+server.listen(PORT, () => {
+    console.log(`🎵 NeighborlyVolume server running on port ${PORT}`);
+    console.log(`🔗 Main app: ${BASE_URL}`);
+    console.log(`🎛️ Example control: ${BASE_URL}/control/demo123`);
+    console.log(`⚙️ Rate limiting: 5 changes per minute per user`);
+    console.log(`🔄 Debouncing: 300ms delay for all changes`);
+    console.log(`⚠️ Conflict detection: 5 second window`);
+    console.log(`🧪 Debug endpoint: ${BASE_URL}/api/debug/[linkId]`);
 });
 
-// ===== CLEANUP FUNCTIONS =====
-setInterval(async () => {
-    console.log('🧹 Running session cleanup...');
-    
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+// ===== HELPER FUNCTIONS =====
+
+// Cleanup old sessions
+setInterval(() => {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     let cleanedCount = 0;
     
     for (const [linkId, session] of activeSessions.entries()) {
-        if (session.createdAt < sevenDaysAgo || (session.expiresAt && new Date() > session.expiresAt)) {
+        if (session.createdAt < oneDayAgo) {
             activeSessions.delete(linkId);
             cleanedCount++;
+            console.log(`🧹 Cleaned up old session: ${linkId}`);
         }
     }
     
     if (cleanedCount > 0) {
-        await saveSessions();
-        console.log(`🧹 Cleaned up ${cleanedCount} expired sessions. Active sessions: ${activeSessions.size}`);
+        console.log(`🧹 Cleanup completed: ${cleanedCount} old sessions removed`);
     }
-}, 24 * 60 * 60 * 1000); // Run daily cleanup
+}, 60 * 60 * 1000); // Check every hour
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('🛑 Received SIGTERM, saving data and shutting down...');
-    await saveSessions();
-    await saveTokens();
-    process.exit(0);
-});
+// Cleanup old rate limiter data
+setInterval(() => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    let cleanedUsers = 0;
+    
+    for (const [userId, userLimit] of rateLimiter.users.entries()) {
+        if (userLimit.lastRefill < oneHourAgo && userLimit.tokens === rateLimiter.maxTokens) {
+            rateLimiter.users.delete(userId);
+            cleanedUsers++;
+        }
+    }
+    
+    if (cleanedUsers > 0) {
+        console.log(`🧹 Rate limiter cleanup: ${cleanedUsers} inactive users removed`);
+    }
+}, 30 * 60 * 1000); // Check every 30 minutes
 
-process.on('SIGINT', async () => {
-    console.log('🛑 Received SIGINT, saving data and shutting down...');
-    await saveSessions();
-    await saveTokens();
-    process.exit(0);
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        activeSessions: activeSessions.size,
+        rateLimiterUsers: rateLimiter.users.size,
+        memory: process.memoryUsage()
+    });
 });
