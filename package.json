@@ -1,11 +1,12 @@
 {
   "name": "neighborlyvolume",
-  "version": "1.0.0",
-  "description": "Sąsiedzka kontrola głośności Spotify",
+  "version": "2.0.0",
+  "description": "🎵 Sąsiedzka kontrola głośności Spotify z Easter Eggami i sekretami!",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "test": "echo \"🎭 No tests yet - but app has Easter eggs!\" && exit 0"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -15,7 +16,28 @@
     "uuid": "^9.0.0",
     "socket.io": "^4.7.4"
   },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
   "engines": {
     "node": "18.x"
-  }
+  },
+  "keywords": [
+    "spotify",
+    "neighbors",
+    "volume-control",
+    "harmony",
+    "easter-eggs",
+    "nightwish",
+    "poetry-mode",
+    "cat-mode",
+    "magic"
+  ],
+  "author": "NeighborlyVolume Team 🎵",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neighborlyvolume/app"
+  },
+  "homepage": "https://neighborlyvolume-app.onrender.com"
 }
