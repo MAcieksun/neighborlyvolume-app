@@ -8,321 +8,6 @@
     <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-FS0WMZDR66"></script>
 <script>
-
-    // NOWE: Neighbor Management Functions
-
-// Global state dla neighbor management
-let neighborManagement = {
-    currentInvite: null,
-    emergencyActive: false,
-    neighbors: [],
-    pendingApprovals: []
-};
-
-// Po successful auth, pokaż neighbor management
-function handleSuccessfulAuth(userName, userId) {
-    // ... existing code ...
-    
-    // DODAJ na końcu funkcji:
-    document.getElementById('neighbor-management').classList.remove('hidden');
-    loadNeighborData();
-}
-
-// Załaduj dane o sąsiadach
-async function loadNeighborData() {
-    if (!appState.currentSession) return;
-    
-    try {
-        const response = await fetch(`/api/auth-stats/${appState.currentSession}`);
-        if (response.ok) {
-            const authStats = await response.json();
-            updateNeighborDisplay(authStats);
-        }
-    } catch (error) {
-        console.error('Failed to load neighbor data:', error);
-    }
-}
-
-// Utwórz zaproszenie
-async function createInvite() {
-    const neighborName = document.getElementById('neighbor-name').value.trim();
-    if (!neighborName) {
-        showNotification('❌ Wprowadź nazwę sąsiada', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/invite-neighbor/${appState.currentSession}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: appState.userId,
-                neighborName: neighborName
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            neighborManagement.currentInvite = data.invite;
-            displayGeneratedInvite(data.invite);
-            document.getElementById('neighbor-name').value = '';
-            showNotification('📧 Zaproszenie utworzone!', 'success');
-        } else {
-            showNotification('❌ Błąd tworzenia zaproszenia', 'error');
-        }
-    } catch (error) {
-        console.error('Create invite error:', error);
-        showNotification('❌ Błąd połączenia', 'error');
-    }
-}
-
-// Wyświetl wygenerowane zaproszenie
-function displayGeneratedInvite(invite) {
-    document.getElementById('invite-code-display').textContent = invite.inviteCode;
-    document.getElementById('invite-link-display').textContent = invite.inviteLink;
-    document.getElementById('generated-invite').classList.remove('hidden');
-}
-
-// Kopiuj zaproszenie
-function copyInvite() {
-    if (!neighborManagement.currentInvite) return;
-    
-    const link = neighborManagement.currentInvite.inviteLink;
-    navigator.clipboard.writeText(link).then(() => {
-        showNotification('📋 Link skopiowany!', 'success');
-    });
-}
-
-// WhatsApp share
-function shareInviteWhatsApp() {
-    if (!neighborManagement.currentInvite) return;
-    
-    const invite = neighborManagement.currentInvite;
-    const message = `🎵 Hej! Zapraszam Cię do kontrolowania głośności mojej muzyki przez NeighborlyVolume!\n\nKod: ${invite.inviteCode}\nLink: ${invite.inviteLink}\n\nTo pomoże nam żyć w większej harmonii! 😊`;
-    
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-    
-    showNotification('💬 WhatsApp otwarty!', 'success');
-}
-
-// QR Code (placeholder)
-function showInviteQR() {
-    showNotification('📱 QR kod - wkrótce!', 'info');
-}
-
-// Aktualizuj wyświetlanie sąsiadów
-function updateNeighborDisplay(authStats) {
-    const container = document.getElementById('neighbors-container');
-    const pendingContainer = document.getElementById('pending-container');
-    
-    // Wyczyść
-    container.innerHTML = '';
-    pendingContainer.innerHTML = '';
-    
-    neighborManagement.neighbors = authStats.neighbors || [];
-    neighborManagement.pendingApprovals = authStats.neighbors?.filter(n => n.status === 'pending') || [];
-    
-    // Aktywni sąsiedzi
-    const activeNeighbors = authStats.neighbors?.filter(n => n.status === 'active') || [];
-    
-    if (activeNeighbors.length === 0) {
-        container.innerHTML = `
-            <div class="no-neighbors">
-                <p style="opacity: 0.7; text-align: center; padding: 20px;">
-                    Brak aktywnych sąsiadów. Utwórz zaproszenie powyżej.
-                </p>
-            </div>
-        `;
-    } else {
-        activeNeighbors.forEach(neighbor => {
-            const neighborEl = createNeighborElement(neighbor);
-            container.appendChild(neighborEl);
-        });
-    }
-    
-    // Oczekujące zatwierdzenia
-    if (neighborManagement.pendingApprovals.length > 0) {
-        document.getElementById('pending-approvals').classList.remove('hidden');
-        
-        neighborManagement.pendingApprovals.forEach(neighbor => {
-            const pendingEl = createPendingElement(neighbor);
-            pendingContainer.appendChild(pendingEl);
-        });
-    } else {
-        document.getElementById('pending-approvals').classList.add('hidden');
-    }
-    
-    // Emergency status
-    if (authStats.emergencyMode) {
-        neighborManagement.emergencyActive = true;
-        updateEmergencyButton(true);
-    }
-}
-
-// Utwórz element sąsiada
-function createNeighborElement(neighbor) {
-    const div = document.createElement('div');
-    div.className = 'neighbor-item';
-    
-    const usagePercent = Math.round((neighbor.dailyUsage.volumeChanges / neighbor.permissions.dailyVolumeLimit) * 100);
-    const statusColor = usagePercent > 80 ? '#FF5722' : usagePercent > 50 ? '#FFC107' : '#1DB954';
-    
-    div.innerHTML = `
-        <div class="neighbor-info">
-            <div class="neighbor-name">${neighbor.neighborName}</div>
-            <div class="neighbor-status">
-                📊 Użycie: ${neighbor.dailyUsage.volumeChanges}/${neighbor.permissions.dailyVolumeLimit} (${usagePercent}%)
-                <span style="color: ${statusColor};">●</span>
-            </div>
-            <div class="neighbor-status" style="font-size: 0.8rem;">
-                Dołączył: ${new Date(neighbor.joinedAt).toLocaleString('pl-PL')}
-            </div>
-        </div>
-        <div class="neighbor-actions">
-            <button class="btn" onclick="viewNeighborDetails('${neighbor.neighborId}')">
-                📊 Szczegóły
-            </button>
-            <button class="btn" onclick="removeNeighbor('${neighbor.neighborId}')" 
-                    style="background: #e74c3c; border-color: #e74c3c;">
-                🚫 Usuń
-            </button>
-        </div>
-    `;
-    
-    return div;
-}
-
-// Utwórz element oczekującego
-function createPendingElement(neighbor) {
-    const div = document.createElement('div');
-    div.className = 'pending-item';
-    
-    div.innerHTML = `
-        <div class="neighbor-info">
-            <div class="neighbor-name">${neighbor.neighborName}</div>
-            <div class="neighbor-status">Oczekuje na zatwierdzenie</div>
-        </div>
-        <div class="neighbor-actions">
-            <button class="btn" onclick="approveNeighbor('${neighbor.neighborId}')" 
-                    style="background: #27ae60; border-color: #27ae60;">
-                ✅ Zatwierdź
-            </button>
-            <button class="btn" onclick="rejectNeighbor('${neighbor.neighborId}')" 
-                    style="background: #e74c3c; border-color: #e74c3c;">
-                ❌ Odrzuć
-            </button>
-        </div>
-    `;
-    
-    return div;
-}
-
-// Zatwierdź sąsiada
-async function approveNeighbor(neighborId) {
-    try {
-        const response = await fetch(`/api/approve-neighbor/${appState.currentSession}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: appState.userId,
-                neighborId: neighborId
-            })
-        });
-        
-        if (response.ok) {
-            showNotification('✅ Sąsiad zatwierdzony!', 'success');
-            loadNeighborData(); // Reload data
-        } else {
-            showNotification('❌ Błąd zatwierdzania', 'error');
-        }
-    } catch (error) {
-        console.error('Approve error:', error);
-        showNotification('❌ Błąd połączenia', 'error');
-    }
-}
-
-// Odrzuć sąsiada (placeholder)
-function rejectNeighbor(neighborId) {
-    showNotification('🚫 Sąsiad odrzucony', 'warning');
-    // TODO: Implement reject API
-}
-
-// Usuń sąsiada (placeholder) 
-function removeNeighbor(neighborId) {
-    if (confirm('Czy na pewno chcesz usunąć tego sąsiada?')) {
-        showNotification('🚫 Sąsiad usunięty', 'warning');
-        // TODO: Implement remove API
-    }
-}
-
-// Szczegóły sąsiada (placeholder)
-function viewNeighborDetails(neighborId) {
-    showNotification('📊 Szczegóły - wkrótce!', 'info');
-}
-
-// Toggle emergency mode
-async function toggleEmergency() {
-    const action = neighborManagement.emergencyActive ? 'deactivate' : 'activate';
-    
-    try {
-        const response = await fetch(`/api/emergency-override/${appState.currentSession}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: appState.userId,
-                action: action
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            neighborManagement.emergencyActive = !neighborManagement.emergencyActive;
-            updateEmergencyButton(neighborManagement.emergencyActive);
-            
-            if (neighborManagement.emergencyActive) {
-                showNotification('🚨 Tryb awaryjny aktywny!', 'warning');
-            } else {
-                showNotification('✅ Tryb awaryjny wyłączony', 'success');
-            }
-        } else {
-            showNotification('❌ Błąd trybu awaryjnego', 'error');
-        }
-    } catch (error) {
-        console.error('Emergency toggle error:', error);
-        showNotification('❌ Błąd połączenia', 'error');
-    }
-}
-
-// Aktualizuj przycisk emergency
-function updateEmergencyButton(isActive) {
-    const btn = document.getElementById('emergency-btn');
-    if (isActive) {
-        btn.textContent = '✅ Wyłącz Tryb Awaryjny';
-        btn.classList.add('active');
-    } else {
-        btn.textContent = '🚨 Aktywuj Tryb Awaryjny';
-        btn.classList.remove('active');
-    }
-}
-
-// Aktualizuj WebSocket handling - DODAJ do istniejącego kodu
-appState.socket.on('session_update', (data) => {
-    if (data.type === 'neighbor_joined') {
-        showNotification(`🏠 ${data.neighborName} dołączył!`, 'info');
-        loadNeighborData();
-    } else if (data.type === 'emergency_override_activated') {
-        neighborManagement.emergencyActive = true;
-        updateEmergencyButton(true);
-        showNotification('🚨 Tryb awaryjny aktywowany', 'warning');
-    } else if (data.type === 'emergency_override_deactivated') {
-        neighborManagement.emergencyActive = false;
-        updateEmergencyButton(false);
-        showNotification('✅ Tryb awaryjny wyłączony', 'success');
-    }
-});
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
@@ -339,171 +24,6 @@ appState.socket.on('session_update', (data) => {
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-
-        .invite-section {
-    margin-bottom: 30px;
-    padding: 20px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    border-left: 4px solid #1DB954;
-}
-
-.invite-form {
-    display: flex;
-    align-items: center;
-    margin: 15px 0;
-}
-
-.generated-invite {
-    margin-top: 20px;
-    padding: 20px;
-    background: rgba(29, 185, 84, 0.1);
-    border-radius: 12px;
-    border: 2px solid #1DB954;
-}
-
-.invite-display {
-    text-align: center;
-    margin-bottom: 15px;
-}
-
-.invite-code {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #1DB954;
-    letter-spacing: 3px;
-    margin-bottom: 10px;
-}
-
-.invite-link {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    word-break: break-all;
-    background: rgba(0,0,0,0.3);
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 15px;
-}
-
-.invite-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
-.neighbors-list {
-    margin-bottom: 30px;
-}
-
-.neighbor-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 10px;
-    margin-bottom: 10px;
-    border-left: 4px solid #1DB954;
-}
-
-.neighbor-info {
-    flex: 1;
-}
-
-.neighbor-name {
-    font-weight: bold;
-    color: #1DB954;
-    margin-bottom: 5px;
-}
-
-.neighbor-status {
-    font-size: 0.85rem;
-    opacity: 0.8;
-}
-
-.neighbor-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.neighbor-actions .btn {
-    padding: 8px 12px;
-    font-size: 0.8rem;
-}
-
-.pending-section {
-    margin-bottom: 30px;
-}
-
-.pending-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: rgba(255, 193, 7, 0.1);
-    border-radius: 10px;
-    margin-bottom: 10px;
-    border-left: 4px solid #FFC107;
-}
-
-.emergency-section {
-    margin-top: 30px;
-    padding: 20px;
-    background: rgba(255, 87, 34, 0.1);
-    border-radius: 12px;
-    border-left: 4px solid #FF5722;
-}
-
-.btn.emergency {
-    background: linear-gradient(45deg, #FF5722, #e74c3c);
-    border-color: #FF5722;
-    color: white;
-    font-weight: bold;
-}
-
-.btn.emergency:hover:not(:disabled) {
-    background: linear-gradient(45deg, #e74c3c, #c0392b);
-}
-
-.btn.emergency.active {
-    background: linear-gradient(45deg, #27ae60, #2ecc71);
-}
-
-.no-neighbors {
-    text-align: center;
-    padding: 20px;
-    opacity: 0.7;
-}
-
-@media (max-width: 768px) {
-    .invite-form {
-        flex-direction: column;
-    }
-    
-    .invite-form input {
-        width: 100% !important;
-        margin-right: 0 !important;
-        margin-bottom: 10px;
-    }
-    
-    .invite-form button {
-        width: 100% !important;
-    }
-    
-    .invite-actions {
-        grid-template-columns: 1fr;
-    }
-    
-    .neighbor-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .neighbor-actions {
-        margin-top: 10px;
-        width: 100%;
-    }
-}
         * {
             margin: 0;
             padding: 0;
@@ -876,7 +396,7 @@ appState.socket.on('session_update', (data) => {
                     <p data-i18n="welcome-user">Witaj, <strong id="user-name">...</strong>!</p>
                     
                     <div style="margin: 15px 0;">
-                        <button class="btn disconnect" onclick="dis">
+                        <button class="btn disconnect" onclick="disconnectSpotify()">
                             <span data-i18n="disconnect-btn">🚪 Rozłącz ze Spotify</span>
                         </button>
                     </div>
@@ -922,71 +442,7 @@ appState.socket.on('session_update', (data) => {
                 </div>
             </div>
         </div>
-<!-- DODAJ DO index.html PRZED SEKCJĄ stats-section -->
 
-        <!-- NOWE: NEIGHBOR MANAGEMENT SECTION -->
-        <div class="card hidden" id="neighbor-management">
-            <h2 style="margin-bottom: 25px;">👥 Zarządzanie Sąsiadami</h2>
-            
-            <!-- Invite Creation -->
-            <div class="invite-section">
-                <h3>📧 Zaproś Sąsiada</h3>
-                <div class="invite-form">
-                    <input type="text" id="neighbor-name" placeholder="Nazwa sąsiada (np. 'Mieszkanie 15')" 
-                           style="width: 70%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-right: 10px;">
-                    <button class="btn primary" onclick="createInvite()" style="width: 25%;">
-                        Utwórz Zaproszenie
-                    </button>
-                </div>
-                
-                <!-- Generated Invite -->
-                <div id="generated-invite" class="generated-invite hidden">
-                    <div class="invite-display">
-                        <div class="invite-code" id="invite-code-display">ABC123</div>
-                        <div class="invite-link" id="invite-link-display">https://app.com/join/ABC123</div>
-                    </div>
-                    <div class="invite-actions">
-                        <button class="btn" onclick="copyInvite()">📋 Kopiuj Link</button>
-                        <button class="btn" onclick="shareInviteWhatsApp()">💬 WhatsApp</button>
-                        <button class="btn" onclick="showInviteQR()">📱 QR Code</button>
-                    </div>
-                    <p style="font-size: 0.9rem; opacity: 0.7; margin-top: 10px;">
-                        Zaproszenie wygasa za 24 godziny
-                    </p>
-                </div>
-            </div>
-            
-            <!-- Active Neighbors -->
-            <div class="neighbors-list">
-                <h3>🏠 Aktywni Sąsiedzi</h3>
-                <div id="neighbors-container">
-                    <div class="no-neighbors">
-                        <p style="opacity: 0.7; text-align: center; padding: 20px;">
-                            Brak aktywnych sąsiadów. Utwórz zaproszenie powyżej.
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Pending Approvals -->
-            <div id="pending-approvals" class="pending-section hidden">
-                <h3>⏳ Oczekujące Zatwierdzenia</h3>
-                <div id="pending-container"></div>
-            </div>
-            
-            <!-- Emergency Controls -->
-            <div class="emergency-section">
-                <h3>🚨 Kontrola Awaryjna</h3>
-                <div class="emergency-controls">
-                    <button class="btn emergency" id="emergency-btn" onclick="toggleEmergency()">
-                        🚨 Aktywuj Tryb Awaryjny
-                    </button>
-                    <p style="font-size: 0.9rem; opacity: 0.8; margin-top: 10px;">
-                        Zablokuje kontrolę wszystkich sąsiadów na 5 minut
-                    </p>
-                </div>
-            </div>
-        </div>
         <!-- STATS -->
         <div class="card hidden" id="stats-section">
             <h2 style="margin-bottom: 25px;" data-i18n="live-stats">📊 Statystyki na Żywo</h2>
@@ -1224,6 +680,12 @@ appState.socket.on('session_update', (data) => {
             localStorage.removeItem('neighborly_userId');
             localStorage.removeItem('neighborly_userName');
             localStorage.removeItem('neighborly_sessionId');
+            // Clear session start times
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('neighborly_session_start_')) {
+                    localStorage.removeItem(key);
+                }
+            });
             console.log('🧹 Session cleared from localStorage');
         }
 
@@ -1282,6 +744,15 @@ appState.socket.on('session_update', (data) => {
                 
                 showNotification(`${translations[appState.currentLanguage]['session-restored']} ${userName}`, 'success');
                 startTrackUpdates();
+                
+                // Get the original session start time
+                const savedStartTime = localStorage.getItem(`neighborly_session_start_${existingSessionId}`);
+                if (savedStartTime) {
+                    appState.sessionStartTime = parseInt(savedStartTime);
+                } else {
+                    appState.sessionStartTime = Date.now();
+                }
+                startSessionTimer();
             } else {
                 showNotification(`${translations[appState.currentLanguage]['connected-spotify']}`, 'success');
             }
@@ -1291,14 +762,14 @@ appState.socket.on('session_update', (data) => {
         }
 
         // Connect to Spotify
-       function connectSpotify() {
-    gtag('event', 'spotify_connect_attempt', {
-        event_category: 'authentication',
-        event_label: 'main_page'
-    });
-    showNotification('🔄 Przekierowywanie do Spotify...', 'info');
-    window.location.href = '/auth/login';
-}
+        function connectSpotify() {
+            gtag('event', 'spotify_connect_attempt', {
+                event_category: 'authentication',
+                event_label: 'main_page'
+            });
+            showNotification('🔄 Przekierowywanie do Spotify...', 'info');
+            window.location.href = '/auth/login';
+        }
 
         // Disconnect function
         function disconnectSpotify() {
@@ -1336,15 +807,21 @@ appState.socket.on('session_update', (data) => {
 
                 const data = await response.json();
                 
-             if (data.success) {
-    gtag('event', 'link_generated', {
-        event_category: 'sharing',
-        event_label: 'neighbor_link'
-    });
+                if (data.success) {
+                    gtag('event', 'link_generated', {
+                        event_category: 'sharing',
+                        event_label: 'neighbor_link'
+                    });
+                    
+                    appState.currentSession = data.linkId;
                     
                     // Save session ID to localStorage
                     const savedUserName = localStorage.getItem('neighborly_userName');
                     saveSession(appState.userId, savedUserName, data.linkId);
+                    
+                    // Save session start time
+                    appState.sessionStartTime = Date.now();
+                    localStorage.setItem(`neighborly_session_start_${data.linkId}`, appState.sessionStartTime.toString());
                     
                     document.getElementById('share-url').textContent = data.shareLink;
                     document.getElementById('link-display').classList.remove('hidden');
@@ -1356,7 +833,6 @@ appState.socket.on('session_update', (data) => {
                         appState.socket.emit('join_session', data.linkId);
                     }
                     
-                    appState.sessionStartTime = Date.now();
                     startSessionTimer();
                     
                 } else {
@@ -1493,8 +969,8 @@ appState.socket.on('session_update', (data) => {
                 activityText = volumeText;
             } else if (action.message) {
                 activityText = `💬 ${action.neighborId}: "${action.message}"`;
-                if (action.author) {
-                    activityText += ` ${action.author}`;
+                if (action.isCustom) {
+                    activityText += ' 📝';
                 }
             }
             
