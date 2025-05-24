@@ -423,6 +423,7 @@ app.put('/api/control/:linkId', async (req, res) => {
             );
             
             session.volume = volume;
+            stats.volumeChanges++; // DODAJ TO
             console.log('✅ VOLUME SET SUCCESSFULLY:', volume);
         }
         
@@ -675,6 +676,14 @@ app.get('/control/:linkId', (req, res) => {
 });
 
 // ===== GŁÓWNA STRONA =====
+// STATS ENDPOINT - DODAJ TO
+app.get('/api/stats', (req, res) => {
+    res.json({
+        ...stats,
+        activeSessions: activeSessions.size,
+        uptime: Math.floor((Date.now() - stats.startTime) / 1000 / 60) + ' minutes'
+    });
+});
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
