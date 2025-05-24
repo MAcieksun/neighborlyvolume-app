@@ -378,7 +378,93 @@ io.on('connection', (socket) => {
         console.log('❌ Client disconnected');
     });
 });
+// ===== ZARZĄDZANIE SESJĄ =====
 
+// Check if session is still valid
+app.get('/api/session/check/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    
+    console.log('🔍 SESSION CHECK REQUEST:', { sessionId });
+    
+    const session = activeSessions.get(sessionId);
+    if (!session) {
+        console.log('❌ SESSION NOT FOUND:', sessionId);
+        return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    console.log('✅ SESSION FOUND:', { sessionId, userId: session.userId });
+    
+    try {
+        // Test if Spotify token is still valid
+        const playerResponse = await axios.get('https://api.spotify.com/v1/me/player', {
+            headers: { 'Authorization': `Bearer ${session.accessToken}` }
+        });
+        
+        console.log('✅ SPOTIFY TOKEN STILL VALID');
+        
+        res.json({ 
+            success: true, 
+            session: {
+                userId: session.userId,
+                sessionId: sessionId,
+                neighbors: session.neighbors.length,
+                volume: session.volume
+            }
+        });
+        
+    } catch (error) {
+        console.log('❌ SPOTIFY TOKEN INVALID:', error.response?.status);
+        
+        // Remove invalid session
+        activeSessions.delete(sessionId);
+        
+        res.status(401).json({ 
+            error: 'Session token expired',
+            needsReauth: true 
+        });
+    }
+});
+
+// Check if user tokens are still valid (without active session)
+app.post('/api/user/check', async (req, res) => {
+    const { userId } = req.body;
+    
+    console.log('👤 USER CHECK REQUEST:', { userId });
+    
+    const userToken = userTokens.get(userId);
+    if (!userToken) {
+        console.log('❌ USER TOKEN NOT FOUND:', userId);
+        return res.status(404).json({ error: 'User not found' });
+    }
+    
+    try {
+        // Test if Spotify token is still valid
+        const userResponse = await axios.get('https://api.spotify.com/v1/me', {
+            headers: { 'Authorization': `Bearer ${userToken.access_token}` }
+        });
+        
+        console.log('✅ USER TOKEN STILL VALID:', { userId, userName: userResponse.data.display_name });
+        
+        res.json({ 
+            success: true, 
+            user: {
+                userId: userId,
+                name: userResponse.data.display_name
+            }
+        });
+        
+    } catch (error) {
+        console.log('❌ USER TOKEN INVALID:', { userId, error: error.response?.status });
+        
+        // Remove invalid user token
+        userTokens.delete(userId);
+        
+        res.status(401).json({ 
+            error: 'User token expired',
+            needsReauth: true 
+        });
+    }
+});
 // ===== START SERWERA =====
 server.listen(PORT, () => {
     console.log(`🎵 NeighborlyVolume server running on port ${PORT}`);
